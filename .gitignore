@@ -1,0 +1,4 @@
+/build/
+/rpm_gitoverlay.egg-info/
+/dist/
+__pycache__/
