@@ -142,12 +142,18 @@ class Component(object):
             ver = ver[len(pkg) + 1:]
         if ver.startswith("v"):
             ver = ver[1:]
-        # describe always have -X-gYYYYYYY which we will threat as release
         short_commit = str(repo.head.target)[:7]
         if ver.endswith("-g{}".format(short_commit)):
+            # -X-gYYYYYYY
             tmp = ver.rsplit("-", 2)
             version = tmp[0]
             release = "{}{}".format(tmp[1], tmp[2])
+        elif ver == short_commit:
+            # YYYYYYY
+            version = "0"
+            # Number of commits since the beginning (as we didn't had tags yet)
+            _commits_num = len([x for x in repo.walk(repo.head.target)])
+            release = "{}g{}".format(_commits_num, short_commit)
         else:
             version = ver
             release = "1"
