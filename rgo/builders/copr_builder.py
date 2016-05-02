@@ -87,33 +87,48 @@ class CoprBuilder(object):
                                                chroots=self.chroots,
                                                enable_net=self.enable_net)
 
+        success = True
         # Wait for build to complete
         while True:
             # Refresh info
-            # FIXME: once any of jobs fails build status is also -> failed
-            build = build.get_self()
-            if build.state in ("skipped", "failed", "succeeded"):
-                if build.state == "skipped":
-                    logging.warning("Build #%d was skipped, usually it is wrong", build.id)
+            done = set()
+            for task in build.get_build_tasks():
+                _done = task.state not in ("running", "pending", "starting", "importing")
+                if _done:
+                    if task.state == "failed":
+                        logging.warning("Build #%d (chroot: %r): failed",
+                                        build.id, task.chroot_name)
+                        success = False
+                    elif task.state == "succeeded":
+                        logging.info("Build #%d (chroot: %r): succeeded",
+                                     build.id, task.chroot_name)
+                    else:
+                        raise OverlayException("Build #%d (chroot: %r): %r",
+                                               build.id, task.chroot_name, task.state)
+                        success = False
+                else:
+                    logging.debug("Build #%d (chroot: %r): %r",
+                                  build.id, task.chroot_name, task.state)
+
+                done.add(_done)
+
+            if all(done):
                 break
+
             time.sleep(5)
 
         # Parse results
-        success = True
         rpms = []
         for task in build.get_build_tasks():
-            if success and task.state == "failed":
-                success = False
-            else:
-                url_prefix = task.result_dir_url
-                resp = requests.get(url_prefix)
-                if resp.status_code != 200:
-                    raise Exception("Failed to fetch {!r}: {!s}".format(url_prefix, resp.text))
-                soup = bs4.BeautifulSoup(resp.text, "lxml")
-                for link in soup.find_all("a", href=True):
-                    href = link["href"]
-                    if href.endswith(".rpm") and not href.endswith(".src.rpm"):
-                        rpms.append("{}/{}".format(url_prefix, href))
+            url_prefix = task.result_dir_url
+            resp = requests.get(url_prefix)
+            if resp.status_code != 200:
+                raise Exception("Failed to fetch {!r}: {!s}".format(url_prefix, resp.text))
+            soup = bs4.BeautifulSoup(resp.text, "lxml")
+            for link in soup.find_all("a", href=True):
+                href = link["href"]
+                if href.endswith(".rpm") and not href.endswith(".src.rpm"):
+                    rpms.append("{}/{}".format(url_prefix, href))
 
         if not success:
             # TODO: improve message
