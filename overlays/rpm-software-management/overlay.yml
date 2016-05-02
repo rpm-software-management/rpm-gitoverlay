@@ -5,7 +5,7 @@ components:
     #branch: rpm-4.13.x
     distgit:
       #git: https://pkgs.fedoraproject.org/git/rpms/rpm
-      git: git://fedorapeople.org/home/fedora/ignatenkobrain/public_git/rpm
+      git: https://github.com/ignatenkobrain/rpm-fedora.git
       patches: drop
       keep-patches:
         - rpm-4.11.x-siteconfig.patch
