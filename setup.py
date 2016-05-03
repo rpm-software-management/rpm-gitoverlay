@@ -9,7 +9,7 @@ setup(
     packages=find_packages(),
     entry_points={
         "console_scripts": [
-            "rpm-gitoverlay = rgo.__main__.main"
+            "rpm-gitoverlay = rgo.__main__:main"
         ]
     },
     install_requires=["pygit2", "PyYAML"],
