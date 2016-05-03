@@ -32,7 +32,7 @@ def main(args=None):
     parser.add_argument("--owner", help="COPR project owner",
                         required=True)
     parser.add_argument("--project", help="COPR project name")
-    parser.add_argument("--no-prep", help="Don't try %prep section",
+    parser.add_argument("--no-prep", help="Don't try %%prep section",
                         dest="prep", action="store_false")
     parser.add_argument("overlay", help="Path to overlay yaml file")
     args = parser.parse_args()
