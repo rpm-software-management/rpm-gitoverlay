@@ -39,8 +39,6 @@ def main(args=None):
 
     if args.debug:
         logging.basicConfig(level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
 
     if not os.path.isdir(args.overlay):
         raise Exception("{} is not a directory".format(args.overlay))
