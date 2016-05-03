@@ -34,7 +34,7 @@ def main(args=None):
     parser.add_argument("--project", help="COPR project name")
     parser.add_argument("--no-prep", help="Don't try %%prep section",
                         dest="prep", action="store_false")
-    parser.add_argument("overlay", help="Path to overlay yaml file")
+    parser.add_argument("overlay", help="Path to overlay directory with overlay.yml file")
     args = parser.parse_args()
 
     if args.debug:
@@ -42,10 +42,14 @@ def main(args=None):
     else:
         logging.basicConfig(level=logging.INFO)
 
-    if not os.path.isfile(args.overlay):
-        raise Exception("{} is not a file".format(args.yml))
+    if not os.path.isdir(args.overlay):
+        raise Exception("{} is not a directory".format(args.overlay))
 
-    with open(args.overlay, "r") as yml:
+    _ovl = os.path.join(args.overlay, "overlay.yml")
+    if not os.path.isfile(_ovl):
+        raise Exception("{} is not a file".format(_ovl))
+
+    with open(_ovl, "r") as yml:
         ovl = yaml.load(yml)
     components = [Component(c) for c in ovl["components"]]
 
