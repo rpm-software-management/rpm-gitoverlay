@@ -5,6 +5,9 @@ setup(
     version="0.0.1",
     author="Igor Gnatenko",
     author_email="ignatenko@redhat.com",
+    url="https://github.com/ignatenkobrain/rpm-gitoverlay",
+    description="Manage an overlay repository of RPMs from upstream git",
+    keywords="rpm git",
     license="GPLv3+",
     packages=find_packages(),
     entry_points={
