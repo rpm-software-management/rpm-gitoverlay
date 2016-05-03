@@ -18,6 +18,11 @@
 from datetime import datetime
 import logging
 import time
+import sys
+if sys.version_info.major >= 3:
+    from urllib.parse import urljoin
+else:
+    from urlparse import urljoin
 
 import bs4
 import copr
@@ -62,6 +67,14 @@ class CoprBuilder(object):
             project = projects.projects[0]
 
         return project
+
+    def get_project_url(self, project):
+        # FIXME: uncomment once upstream will implement it
+        #if project.group:
+        #    url = "/coprs/g/{p.group}/{p.name}"
+        #else:
+        url = "/coprs/{p.owner}/{p.name}"
+        return urljoin(self.client.root_url, url.format(p=project))
 
     def build_from_srpm(self, project, srpm):
         """
