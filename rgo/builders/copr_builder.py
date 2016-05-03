@@ -37,12 +37,6 @@ class CoprBuilder(object):
         self.chroots = chroots
         self.enable_net = enable_net
 
-    def getproject(self, owner, name):
-        self.client.projects.get_list(owner=owner, name=name, limit=1)
-        if not projects:
-            raise Exception("Project not found")
-        return projects.projects[0]
-
     def mkproject(self, owner, name=None):
         """
         Create or get project in COPR.
