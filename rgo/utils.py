@@ -281,7 +281,7 @@ class Component(object):
             transform = "s,^{},{},".format(os.path.relpath(self.repo.workdir, start="/"), prefix)
             subprocess.run(["tar", "--exclude-vcs", "-caf", archive_path,
                             "--transform", transform, self.repo.workdir
-                           ], check=True)
+                           ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         elif ARCHIVE_TYPE == "pygit2":
             with tarfile.open(archive_path, "w:xz") as archive:
                 self.repo.write_archive(self.repo[self.repo.head.target], archive,
@@ -310,7 +310,7 @@ class Component(object):
         result = subprocess.run(["rpmbuild", "-bs", _spec_path,
                                  "--define", "_sourcedir {}".format(workdir),
                                  "--define", "_srcrpmdir {}".format(workdir),
-                                ], check=True, stdout=subprocess.PIPE)
+                                ], check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
         return re.match(r"^Wrote: (.+)$", result.stdout.decode("utf-8")).group(1)
 
     def __repr__(self):
@@ -325,6 +325,7 @@ def try_prepare(srpm):
         try:
             subprocess.run(["rpmbuild", "-rp", srpm, "--nodeps",
                             "--define", "_builddir {}".format(tmp),
-                           ], check=True)
-        except subprocess.CalledProcessError:
-            raise OverlayException("Failed to %prep")
+                           ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        except subprocess.CalledProcessError as result:
+            logger.critical(result.output)
+            raise OverlayException("Failed to execute %prep section")
