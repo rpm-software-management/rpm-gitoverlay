@@ -48,6 +48,7 @@ def main(args=None):
                         dest="prep", action="store_false")
     fmt = parser.add_mutually_exclusive_group()
     fmt.add_argument("--json", help="Print output in JSON format", action="store_true")
+    parser.add_argument("-o", "--output", help="Output file")
     parser.add_argument("overlay", help="Path to overlay directory with overlay.yml file")
     args = parser.parse_args()
 
@@ -82,10 +83,15 @@ def main(args=None):
             rpms.extend(builder.build_from_srpm(project, srpm))
 
     if args.json:
-        print(json.dumps({"project_url": project_url, "rpms": rpms}))
+        content = json.dumps({"project_url": project_url, "rpms": rpms})
     else:
-        print("Project URL: {!s}".format(project_url))
-        print("RPMs:\n{}".format("\n".join(rpms)))
+        content = "Project URL: {!s}\nRPMs:\n{}".format(project_url, "\n".join(rpms))
+
+    if args.output:
+        with open(args.output, "w") as out:
+            out.write(content)
+    else:
+        print(content)
 
 if __name__ == "__main__":
     main()
