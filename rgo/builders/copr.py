@@ -16,7 +16,6 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 from datetime import datetime
-import logging
 import time
 import sys
 if sys.version_info.major >= 3:
@@ -28,6 +27,7 @@ import bs4
 import copr
 import requests
 
+from .. import logger
 from ..exceptions import OverlayException
 
 class CoprBuilder(object):
@@ -61,9 +61,9 @@ class CoprBuilder(object):
                                                   chroots=self.chroots,
                                                   build_enable_net=self.enable_net,
                                                   description="RPM git-overlay")
-            logging.info("Created COPR project: %s/%s", owner, name)
+            logger.info("Created COPR project: %s/%s", owner, name)
         else:
-            logging.info("Using existing project: %s/%s", owner, name)
+            logger.info("Using existing project: %s/%s", owner, name)
             project = projects.projects[0]
 
         return project
@@ -103,19 +103,19 @@ class CoprBuilder(object):
                 _done = task.state not in ("running", "pending", "starting", "importing")
                 if _done:
                     if task.state == "failed":
-                        logging.warning("Build #%d (chroot: %r): failed",
-                                        build.id, task.chroot_name)
+                        logger.warning("Build #%d (chroot: %r): failed",
+                                       build.id, task.chroot_name)
                         success = False
                     elif task.state == "succeeded":
-                        logging.info("Build #%d (chroot: %r): succeeded",
-                                     build.id, task.chroot_name)
+                        logger.info("Build #%d (chroot: %r): succeeded",
+                                    build.id, task.chroot_name)
                     else:
                         raise OverlayException("Build #%d (chroot: %r): %r",
                                                build.id, task.chroot_name, task.state)
                         success = False
                 else:
-                    logging.debug("Build #%d (chroot: %r): %r",
-                                  build.id, task.chroot_name, task.state)
+                    logger.debug("Build #%d (chroot: %r): %r",
+                                 build.id, task.chroot_name, task.state)
 
                 done.add(_done)
 

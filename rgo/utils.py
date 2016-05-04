@@ -17,7 +17,6 @@
 
 from datetime import datetime
 import enum
-import logging
 import os
 import re
 import shutil
@@ -29,6 +28,7 @@ import tempfile
 import pygit2
 import rpm
 
+from . import logger
 from .exceptions import OverlayException
 
 # FIXME: use pygit2.write_archive(), but now it looses permissions on files
@@ -101,9 +101,9 @@ class Component(object):
         else:
             path = os.path.join(cwd, "{}{}".format(self.name, suffix))
         assert not os.path.isdir(path)
-        logging.info("Cloning %r into %r", url, path)
+        logger.info("Cloning %r into %r", url, path)
         repo = pygit2.clone_repository(url, path, checkout_branch=branch)
-        logging.info("Cloning done")
+        logger.info("Cloning done")
         return repo
 
     def clone(self, workdir):
@@ -196,18 +196,18 @@ class Component(object):
             if src_type == rpm.RPMBUILD_ISPATCH:
                 if self.patches == PatchesPolicy.keep:
                     if src not in _distpatches:
-                        logging.debug("Keeping patch: %r", src)
+                        logger.debug("Keeping patch: %r", src)
                         patches[src] = src_num
                     else:
-                        logging.debug("Dropping patch: %r", src)
+                        logger.debug("Dropping patch: %r", src)
                         _distpatches.remove(src)
                 elif self.patches == PatchesPolicy.drop:
                     if src in _distpatches:
-                        logging.debug("Keeping patch: %r", src)
+                        logger.debug("Keeping patch: %r", src)
                         patches[src] = src_num
                         _distpatches.remove(src)
                     else:
-                        logging.debug("Dropping patch: %r", src)
+                        logger.debug("Dropping patch: %r", src)
                 else:
                     raise NotImplementedError
             elif src_type == rpm.RPMBUILD_ISSOURCE:
@@ -222,7 +222,7 @@ class Component(object):
                 # XXX: probably we should take it from directory
                 raise Exception("Patches were required to keep, but not found: {}".format(_plist))
             elif self.patches == PatchesPolicy.keep:
-                logging.warning("Patches are already deleted: %s", _plist)
+                logger.warning("Patches are already deleted: %s", _plist)
             else:
                 raise NotImplementedError
             del _plist
@@ -295,7 +295,7 @@ class Component(object):
                                         prefix=archive_prefix)
         else:
             raise NotImplementedError
-        logging.info("Prepared archive with upstream sources: %s", archive_path)
+        logger.info("Prepared archive with upstream sources: %s", archive_path)
 
         # Prepare spec
         _spec, patches = self._prepare_spec(spec,

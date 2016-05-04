@@ -16,29 +16,42 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
-import logging
+import json
 import os
 import tempfile
 
 import yaml
 
+from . import logger
 from .utils import Component, try_prepare
 from .builders import CoprBuilder
 
+def setup_logger(loglevel):
+    import logging
+    if loglevel is None:
+        handler = logging.NullHandler()
+    else:
+        logger.setLevel(getattr(logging, loglevel.upper()))
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter("{asctime!s}:{levelname!s}: {message!s}", style="{")
+        handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
 def main(args=None):
     parser = argparse.ArgumentParser()
-    parser.add_argument("-d", "--debug", help="Enable debug output",
-                        action="store_true")
+    parser.add_argument("--log", help="Log level",
+                        choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"))
     parser.add_argument("--owner", help="COPR project owner",
                         required=True)
     parser.add_argument("--project", help="COPR project name")
     parser.add_argument("--no-prep", help="Don't try %%prep section",
                         dest="prep", action="store_false")
+    fmt = parser.add_mutually_exclusive_group()
+    fmt.add_argument("--json", help="Print output in JSON format", action="store_true")
     parser.add_argument("overlay", help="Path to overlay directory with overlay.yml file")
     args = parser.parse_args()
 
-    if args.debug:
-        logging.basicConfig(level=logging.DEBUG)
+    setup_logger(args.log)
 
     if not os.path.isdir(args.overlay):
         raise Exception("{} is not a directory".format(args.overlay))
@@ -62,11 +75,17 @@ def main(args=None):
 
         builder = CoprBuilder()
         project = builder.mkproject(args.owner, args.project)
+        project_url = builder.get_project_url(project)
+        logger.debug("Project URL: %r", project_url)
         rpms = []
         for srpm in srpms:
             rpms.extend(builder.build_from_srpm(project, srpm))
 
-    print("Built following RPMs:\n{}".format("\n".join(rpms)))
+    if args.json:
+        print(json.dumps({"project_url": project_url, "rpms": rpms}))
+    else:
+        print("Project URL: {!s}".format(project_url))
+        print("RPMs:\n{}".format("\n".join(rpms)))
 
 if __name__ == "__main__":
     main()
