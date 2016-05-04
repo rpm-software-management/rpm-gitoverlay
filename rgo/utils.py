@@ -21,7 +21,6 @@ import os
 import re
 import shutil
 import subprocess
-import sys
 import tarfile
 import tempfile
 
@@ -276,13 +275,7 @@ class Component(object):
 
         # Prepare archive
         archive_prefix = "{}/".format(prefix)
-        if sys.version_info.major >= 3:
-            archive_ext = "tar.xz"
-            archive_mode = "w:xz"
-        else:
-            archive_ext = "tar.gz"
-            archive_mode = "w:gz"
-        archive_name = "{}.{}".format(prefix, archive_ext)
+        archive_name = "{}.tar.xz".format(prefix)
         archive_path = os.path.join(workdir, archive_name)
         if ARCHIVE_TYPE == "tar":
             transform = "s,^{},{},".format(os.path.relpath(self.repo.workdir, start="/"), prefix)
@@ -290,7 +283,7 @@ class Component(object):
                             "--transform", transform, self.repo.workdir
                            ], check=True)
         elif ARCHIVE_TYPE == "pygit2":
-            with tarfile.open(archive_path, archive_mode) as archive:
+            with tarfile.open(archive_path, "w:xz") as archive:
                 self.repo.write_archive(self.repo[self.repo.head.target], archive,
                                         prefix=archive_prefix)
         else:
