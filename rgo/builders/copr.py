@@ -106,9 +106,9 @@ class CoprBuilder(object):
                         logger.info("Build #%d (chroot: %r): succeeded",
                                     build.id, task.chroot_name)
                     else:
+                        success = False
                         raise OverlayException("Build #%d (chroot: %r): %r",
                                                build.id, task.chroot_name, task.state)
-                        success = False
                 else:
                     logger.debug("Build #%d (chroot: %r): %r",
                                  build.id, task.chroot_name, task.state)
