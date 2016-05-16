@@ -16,6 +16,7 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import logging
 import os
 import sys
 import tempfile
@@ -26,14 +27,10 @@ from . import logger, utils
 from .builders import CoprBuilder
 
 def setup_logger(loglevel):
-    import logging
-    if loglevel is None:
-        handler = logging.NullHandler()
-    else:
-        logger.setLevel(getattr(logging, loglevel.upper()))
-        handler = logging.StreamHandler()
-        formatter = logging.Formatter("{asctime!s}:{levelname!s}: {message!s}", style="{")
-        handler.setFormatter(formatter)
+    logger.setLevel(getattr(logging, loglevel.upper()))
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter("{asctime!s}:{levelname!s}: {message!s}", style="{")
+    handler.setFormatter(formatter)
     logger.addHandler(handler)
 
 def fatal(msg):
@@ -54,7 +51,8 @@ def load_ovl(f):
 def main(args=None):
     parser = argparse.ArgumentParser()
     parser.add_argument("--log", help="Log level",
-                        choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"))
+                        choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"),
+                        default="WARNING")
     action = parser.add_subparsers(help="Action", dest="action")
     action.required = True
     action.add_parser("resolve", help="Clone repos, do checkout, etc.")
