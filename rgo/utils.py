@@ -31,6 +31,10 @@ class PatchesPolicy(enum.Enum):
     keep = "keep"
     drop = "drop"
 
+class DistGitType(enum.Enum):
+    dist_git = "dist-git"
+    git_lfs = "git-lfs"
+
 def _require_key(node, key):
     """
     :param dict node: Node
@@ -232,6 +236,20 @@ class Git(object):
         return self.src
 
 class DistGit(Git):
+    """
+    In general, distgit is just git repo with spec file and sources. Large files like
+    upstream tarballs stored outside.
+
+    In Fedora/CentOS is used dist-git (https://github.com/release-engineering/dist-git)
+    which is gitolite + custom lookaside cache (for large files). In this case we have
+    to use pyrpkg (not yet python3 compatible) or tools which are using it, e.g. fepdkg.
+
+    It's also good idea to use git-lfs (https://git-lfs.github.com/) for this purposes.
+    In this case we have to use git-lfs client (here we will use official client).
+    """
+    DIST_GITS = {"pkgs.fedoraproject.org": "fedpkg",
+                 "pkgs.devel.redhat.com": "rhpkg"}
+
     def __init__(self, component, node):
         self.patches = PatchesPolicy(node.pop("patches", "keep"))
         super(DistGit, self).__init__(component, node)
@@ -240,6 +258,33 @@ class DistGit(Git):
 
     def __repr__(self):
         return "<DistGit {!r}>".format(self.src_expanded)
+
+    @property
+    def distgit_type(self):
+        """
+        :return: DistGit type
+        :rtype: rgo.utils.DistGitType
+        """
+        # Ugly hack, yes. But no proper way yet.
+        if list(srv for srv in self.DIST_GITS if srv in self.src_expanded):
+            return DistGitType("dist-git")
+        else:
+            return DistGitType("git-lfs")
+
+    def resolve(self):
+        super().resolve()
+        self.fetch_sources()
+
+    def fetch_sources(self):
+        """Fetch sources."""
+        if self.distgit_type == DistGitType("dist-git"):
+            tool = next(tool for srv, tool in self.DIST_GITS.items() if srv in self.src_expanded)
+            # TODO: use pyrpkg with correct site for python2 (when we will make rgo py2-compatible)
+            subprocess.run([tool, "sources"], cwd=self.git, check=True)
+        elif self.distgit_type == DistGitType("git-lfs"):
+            subprocess.run(["git", "lfs", "fetch"], cwd=self.git, check=True)
+        else:
+            return NotImplemented
 
 class Component(object):
     def __init__(self, overlay, node):
@@ -271,12 +316,15 @@ class Component(object):
         """
         build_cwd = os.path.join(workdir, self.name)
         os.makedirs(build_cwd)
-        if self.git:
-            if self.distgit:
-                spec = os.path.join(self.distgit.git, "{}.spec".format(self.name))
-            else:
-                spec = os.path.join(self.git.git, "{}.spec".format(self.name))
+        if self.distgit:
+            spec = os.path.join(self.distgit.git, "{}.spec".format(self.name))
+            patches = self.distgit.patches
+        else:
+            spec = os.path.join(self.git.git, "{}.spec".format(self.name))
+            patches = PatchesPolicy("keep")
 
+        _spec_path = os.path.join(build_cwd, "{}.spec".format(self.name))
+        if self.git:
             # Get version and release
             version, release = self.git.describe()
 
@@ -292,34 +340,40 @@ class Component(object):
                                check=True, input=out.stdout, stdout=f_archive)
 
             # Prepare new spec
-            if self.distgit:
-                patches = self.distgit.patches
-            else:
-                patches = PatchesPolicy("keep")
-            _spec_path = os.path.join(build_cwd, "{}.spec".format(self.name))
             with open(_spec_path, "w") as specfile:
                 specfile.write(_prepare_spec(spec, version, release, nvr, patches))
+            spec = _spec_path
+        else:
+            # Just copy spec file from distgit
+            shutil.copy2(spec, _spec_path)
 
-            _patches = []
-            for src, _, src_type in rpm.spec(_spec_path).sources:
-                if src_type == rpm.RPMBUILD_ISPATCH:
-                    _patches.append(src)
-            # Copy patches from distgit
-            for patch in _patches:
-                shutil.copy2(os.path.join(self.distgit.git, patch),
-                             os.path.join(build_cwd, patch))
+        _sources = []
+        for src, _, src_type in rpm.spec(spec).sources:
+            if src_type == rpm.RPMBUILD_ISPATCH:
+                if patches == PatchesPolicy("keep"):
+                    _sources.append(src)
+            elif src_type == rpm.RPMBUILD_ISSOURCE:
+                # src in fact is url, but we need filename. We don't want to get
+                # Content-Disposition from HTTP headers, because link could be not
+                # available anymore or broken.
+                src = os.path.basename(src)
+                if self.git and src == os.path.basename(archive):
+                    # Skip sources which are just built
+                    continue
+                _sources.append(src)
+        if _sources and not self.distgit:
+            raise NotImplementedError("Patches/Sources are applied in upstream")
+        # Copy sources/patches from distgit
+        for source in _sources:
+            shutil.copy2(os.path.join(self.distgit.git, source),
+                         os.path.join(build_cwd, source))
 
-            # Build .src.rpm
-            result = subprocess.run(["rpmbuild", "-bs", _spec_path, "--nodeps",
-                                     "--define", "_sourcedir {}".format(build_cwd),
-                                     "--define", "_srcrpmdir {}".format(build_cwd)],
-                                    check=True, stdout=subprocess.PIPE)
-            srpm = re.match(r"^Wrote: (.+)$", result.stdout.decode("utf-8")).group(1)
-        elif self.distgit:
-            # Just rebuild from distgit
-            raise NotImplementedError
-
-        return srpm
+        # Build .src.rpm
+        result = subprocess.run(["rpmbuild", "-bs", _spec_path, "--nodeps",
+                                 "--define", "_sourcedir {}".format(build_cwd),
+                                 "--define", "_srcrpmdir {}".format(build_cwd)],
+                                check=True, stdout=subprocess.PIPE)
+        return re.match(r"^Wrote: (.+)$", result.stdout.decode("utf-8")).group(1)
 
     def __repr__(self):
         return "<Component {!r}>".format(self.name)
