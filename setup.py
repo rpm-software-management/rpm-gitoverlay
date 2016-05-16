@@ -15,7 +15,7 @@ setup(
             "rpm-gitoverlay = rgo.__main__:main"
         ]
     },
-    install_requires=["pygit2", "PyYAML"],
+    install_requires=["PyYAML"],
     extras_require={
         "copr": ["copr", "requests", "beautifulsoup4"],
     },

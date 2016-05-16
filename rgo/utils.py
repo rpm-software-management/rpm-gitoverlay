@@ -21,311 +21,325 @@ import os
 import re
 import shutil
 import subprocess
-import tarfile
 import tempfile
 
-import pygit2
 import rpm
 
 from . import logger
-from .exceptions import OverlayException
-
-# FIXME: use pygit2.write_archive(), but now it looses permissions on files
-# https://github.com/libgit2/pygit2/issues/616
-ARCHIVE_TYPE = "tar" # pygit2
 
 class PatchesPolicy(enum.Enum):
-    keep = 0
-    drop = 1
+    keep = "keep"
+    drop = "drop"
 
-class Component(object):
+def _require_key(node, key):
+    """
+    :param dict node: Node
+    :param str key: Key
+    :raises KeyError: if node doesn't contain key
+    """
+    if key not in node:
+        raise KeyError("Missing required key: {!r}".format(key))
+    return node.pop(key)
+
+def _ensure_any(node, keys):
+    """
+    :param dict node: Node
+    :param list keys: Keys
+    :raises KeyError: if node doesn't contain at least 1 of keys
+    """
+    if not any(k in node for k in keys):
+        raise KeyError
+
+def _ensure_empty(node):
+    """
+    :param dict node: Node
+    :raises KeyError: if node is not empty
+    """
+    if node:
+        keys = ["{!r}".format(k) for k in node]
+        raise KeyError("Given extra keys: {}".format(", ".join(keys)))
+
+def _gen_changelog(version, release):
+    """
+    Generate dumb changelog.
+
+    :param str version: Version
+    :param str release: Release
+    :return: Changelog entry
+    :rtype: str
+    """
+    out = []
+    out.append("%changelog")
+    out.append("* {date} rpm-gitoverlay - {version}-{release}".format(
+        date=datetime.now().strftime("%a %b %d %Y"),
+        version=version, release=release))
+    out.append("- Built using rpm-gitoverlay")
+    return "\n".join(out)
+
+def _prepare_spec(spec, version, release, prefix, patches):
+    """
+    Do some magic on spec.
+
+    :param str spec: Path to RPM spec
+    :param str version: Version
+    :param str release: Release
+    :param str prefix: Archive prefix
+    :param rgo.utils.PatchesPolicy patches: Patches policy
+    :return: Patched RPM spec
+    :rtype: str
+    """
+    rpmspec = rpm.spec(spec)
+
+    # TODO: currently we don't support multiple sources
+    if len([x for _, _, x in rpmspec.sources if x == rpm.RPMBUILD_ISSOURCE]) > 1:
+        raise NotImplementedError
+
+    with open(spec, "r") as specfile:
+        _spec = specfile.readlines()
+
+    out = []
+    patch_tag_re = re.compile(r"^Patch\d+:")
+    source_tag_re = re.compile(r"^Source(\d*):")
+    patch_apply_re = re.compile(r"^%patch\d+")
+    for line in _spec:
+        line = line.rstrip()
+        if line.startswith("Version:"):
+            line = "Version: {}".format(version)
+        elif line.startswith("Release:"):
+            line = "Release: {}%{{?dist}}".format(release)
+        elif line.startswith("Patch"):
+            match = patch_tag_re.match(line)
+            if match and patches == PatchesPolicy.drop:
+                continue
+        elif line.startswith("Source"):
+            match = source_tag_re.match(line)
+            if match:
+                archive = "{}.tar.xz".format(prefix)
+                if not match.group(1):
+                    line = "Source: {}".format(archive)
+                else:
+                    line = "Source{:d}: {}".format(int(match.group(1)), archive)
+        elif line.startswith(("%setup", "%autosetup")):
+            line = "{} -n {}".format(line, prefix)
+        elif line.startswith("%patch"):
+            match = patch_apply_re.match(line)
+            if match and patches == PatchesPolicy.drop:
+                continue
+        elif line.startswith("%autopatch"):
+            if patches == PatchesPolicy.drop:
+                continue
+        elif line == "%changelog":
+            # Wipe out changelog
+            break
+        out.append(line)
+
+    out.extend(_gen_changelog(version, release).split("\n"))
+    return "\n".join(out)
+
+def try_prep(srpm):
+    """
+    Try %prep on .src.rpm.
+
+    :param str srpm: Path to src.rpm
+    :raises subprocess.CalledProcessError: if something fails
+    """
+    logger.debug("Trying to run %%prep on: %r", srpm)
+    with tempfile.TemporaryDirectory(prefix="rpm-gitoverlay", suffix="-prep") as tmp:
+        subprocess.run(["rpmbuild", "-rp", srpm, "--nodeps",
+                        "--define", "_builddir {}".format(tmp)],
+                       check=True)
+
+class Alias(object):
     def __init__(self, node):
-        if "git" not in node and "distgit" not in node:
-            raise Exception("Neither 'git' nor 'distgit' specified")
-        self.name = node.pop("name")
+        self.name = _require_key(node, "name")
+        self.url = _require_key(node, "url")
+        _ensure_empty(node)
 
+    def __repr__(self):
+        return "<Alias {!r}: {!r}>".format(self.name, self.url)
+
+class Git(object):
+    def __init__(self, component, node):
+        self.component = component
+        self._suffix = "-git"
         self.git = None
-        self.branch = None
-        self.distgit = None
-        self.distbranch = None
-        self.patches = PatchesPolicy.keep
-        self.distpatches = []
 
-        if "git" in node:
-            self.git = node.pop("git")
-            if "branch" in node:
-                self.branch = node.pop("branch")
-        else:
-            if "branch" in node:
-                raise Exception("'branch' specified, but 'git' is not")
+        self.src = _require_key(node, "src")
+        self.freeze = node.pop("freeze", None)
+        _ensure_empty(node)
 
-        if "distgit" in node:
-            distgit = node["distgit"]
-            self.distgit = distgit.pop("git")
-            if "branch" in distgit:
-                self.distbranch = distgit.pop("branch")
+    def resolve(self):
+        assert not self.git
+        self.git = os.path.join(self.component.overlay.cwd_src,
+                                "{}{}".format(self.component.name, self._suffix))
+        logger.debug("Cloning %r into %r", self.src_expanded, self.git)
+        subprocess.run(["git", "clone", self.src_expanded, self.git], check=True)
+        if self.freeze:
+            subprocess.run(["git", "checkout", self.freeze],
+                           cwd=self.git, check=True)
 
-            if "patches" in distgit:
-                self.patches = distgit.pop("patches")
-                for p in PatchesPolicy:
-                    if self.patches == p.name:
-                        self.patches = p
-                        break
-                if not isinstance(self.patches, PatchesPolicy):
-                    raise Exception("Wrong patches policy: {!r}".format(self.patches))
-
-            if self.patches == PatchesPolicy.keep:
-                if "keep-patches" in distgit:
-                    raise Exception("patches: keep and keep-patches at the same time")
-                if "drop-patches" in distgit:
-                    self.distpatches = distgit.pop("drop-patches")
-            if self.patches == PatchesPolicy.drop:
-                if "drop-patches" in distgit:
-                    raise Exception("patches: drop and drop-patches at the same time")
-                if "keep-patches" in distgit:
-                    self.distpatches = distgit.pop("keep-patches")
-
-            if not distgit:
-                node.pop("distgit")
-
-        if node:
-            raise Exception("Some parameters are still in node: {!r}".format(node))
-
-        self.repo = None
-        self.distrepo = None
-
-    def _clone_repo(self, url, cwd, suffix=None, branch=None):
-        if suffix is None:
-            path = os.path.join(cwd, self.name)
-        else:
-            path = os.path.join(cwd, "{}{}".format(self.name, suffix))
-        assert not os.path.isdir(path)
-        logger.info("Cloning %r into %r", url, path)
-        repo = pygit2.clone_repository(url, path, checkout_branch=branch)
-        logger.info("Cloning done")
-        return repo
-
-    def clone(self, workdir):
-        """
-        Clone component's repos.
-
-        :param workdir: Directory to clone in
-        :type workdir: str
-        """
-        if self.git is not None:
-            assert self.repo is None
-            self.repo = self._clone_repo(self.git, workdir,
-                                         suffix="-git",
-                                         branch=self.branch)
-
-        if self.distgit is not None:
-            assert self.distrepo is None
-            self.distrepo = self._clone_repo(self.distgit, workdir,
-                                             suffix="-distgit",
-                                             branch=self.distbranch)
-
-    @staticmethod
-    def _get_ver_rel(repo, pkg=None):
+    def describe(self):
         """
         Get version and release from upstream git repository.
 
-        :param repo:
-        :type repo: pygit2.Repository
-        :param pkg: Package name (used for stripping out)
-        :type pkg: str | None
         :return: Version and Release
         :rtype: tuple(str, str)
         """
-        ver = repo.describe(describe_strategy=pygit2.GIT_DESCRIBE_TAGS)
-        if pkg is not None and ver.startswith("{}-".format(pkg)):
-            ver = ver[len(pkg) + 1:]
-        if ver.startswith("v"):
-            ver = ver[1:]
-        short_commit = str(repo.head.target)[:7]
-        if ver.endswith("-g{}".format(short_commit)):
+        assert self.git
+        out = subprocess.run(["git", "describe", "--tags", "--always"],
+                             cwd=self.git, check=True, stdout=subprocess.PIPE)
+        ver = out.stdout.decode("utf-8").rstrip().lower()
+        chop = lambda v, s: v[len(s):] if v.startswith(s) else v
+        ver = chop(ver, self.component.name)
+        ver = chop(ver, self.component.name.replace("_", "-"))
+        ver = chop(ver, "v")
+        ver = chop(ver, "-")
+        ver = chop(ver, "_")
+        out = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                             cwd=self.git, check=True, stdout=subprocess.PIPE)
+        commit = out.stdout.decode("ascii").rstrip()
+        if ver.endswith("-g{}".format(commit)):
             # -X-gYYYYYYY
             tmp = ver.rsplit("-", 2)
             version = tmp[0]
             release = "{}{}".format(tmp[1], tmp[2])
-        elif ver == short_commit:
+        elif ver == commit:
             # YYYYYYY
             version = "0"
-            # Number of commits since the beginning (as we didn't had tags yet)
-            _commits_num = len([x for x in repo.walk(repo.head.target)])
-            release = "{}g{}".format(_commits_num, short_commit)
+            # Number of commits since the beginning (as we didn't have tags yet)
+            out = subprocess.run(["git", "rev-list", "--count", "HEAD"],
+                                 cwd=self.git, check=True, stdout=subprocess.PIPE)
+            release = "{}g{}".format(out.stdout.decode("ascii").rstrip(), commit)
         else:
+            # tag
             version = ver
             release = "1"
+        # often (in GNOME) tags are like GNOME_BUILDER_3_21_1
+        version = version.replace("_", ".")
         # Sometimes there is "-" in version which is not allowed
         version = version.replace("-", "_")
         return (version, release)
 
-    @staticmethod
-    def _gen_changelog(ver, rel):
-        """
-        Generate dumb changelog entry.
+    def __repr__(self):
+        return "<Git {!r}>".format(self.src_expanded)
 
-        :param ver: Version
-        :type ver: str
-        :param rel: Release
-        :type rel: str
-        :return: Changelog entry
-        :rtype: str
-        """
-        out = []
-        out.append("* {} - rpm-gitoverlay {}-{}".format(datetime.now().strftime("%a %b %d %Y"),
-                                                        ver, rel))
-        out.append("- Built using rpm-gitoverlay")
-        return "\n".join(out)
+    @property
+    def src_expanded(self):
+        for alias in self.component.overlay.aliases:
+            prefix = "{}:".format(alias.name)
+            if self.src.startswith(prefix):
+                return "{}{}".format(alias.url, self.src[len(prefix):])
+        return self.src
 
-    def _prepare_spec(self, spec, version, release, archive, directory):
-        """
-        Do some magic on spec file.
-
-        :param spec: Path to RPM spec file
-        :type spec: str
-        :return: Spec file contents
-        :rtype: str
-        """
-        rpmspec = rpm.spec(spec)
-        # Patches to keep
-        patches = {}
-        _distpatches = self.distpatches.copy()
-        for src, src_num, src_type in rpmspec.sources:
-            if src_type == rpm.RPMBUILD_ISPATCH:
-                if self.patches == PatchesPolicy.keep:
-                    if src not in _distpatches:
-                        logger.debug("Keeping patch: %r", src)
-                        patches[src] = src_num
-                    else:
-                        logger.debug("Dropping patch: %r", src)
-                        _distpatches.remove(src)
-                elif self.patches == PatchesPolicy.drop:
-                    if src in _distpatches:
-                        logger.debug("Keeping patch: %r", src)
-                        patches[src] = src_num
-                        _distpatches.remove(src)
-                    else:
-                        logger.debug("Dropping patch: %r", src)
-                else:
-                    raise NotImplementedError
-            elif src_type == rpm.RPMBUILD_ISSOURCE:
-                if src_num != 0:
-                    raise NotImplementedError
-            else:
-                raise NotImplementedError
-
-        if _distpatches:
-            _plist = " ".join(_distpatches)
-            if self.patches == PatchesPolicy.drop:
-                # XXX: probably we should take it from directory
-                raise Exception("Patches were required to keep, but not found: {}".format(_plist))
-            elif self.patches == PatchesPolicy.keep:
-                logger.warning("Patches are already deleted: %s", _plist)
-            else:
-                raise NotImplementedError
-            del _plist
-            del _distpatches
-
-        with open(spec, "r") as specfile:
-            _spec = specfile.readlines()
-
-        # Wipe out changelog
-        chlog_index = _spec.index("%changelog\n")
-        _spec = _spec[:chlog_index + 1]
-
-        out = []
-        # Templatify Version, Release, etc.
-        patch_tag_re = re.compile(r"^Patch(\d+):")
-        patch_prep_re = re.compile(r"^%patch(\d+) ")
-        for line in _spec:
-            line = line.rstrip()
-            patch_match = patch_tag_re.match(line)
-            if line.startswith("Version:"):
-                line = "Version: {}".format(version)
-            elif line.startswith("Release:"):
-                line = "Release: {}%{{?dist}}".format(release)
-            elif patch_match:
-                if int(patch_match.group(1)) not in patches.values():
-                    continue
-            elif line.lstrip().startswith("%patch"):
-                if int(patch_prep_re.match(line.lstrip()).group(1)) not in patches.values():
-                    continue
-            elif line.lstrip().startswith("%autopatch"):
-                if not patches:
-                    continue
-            elif line.startswith("Source0:"):
-                line = "Source0: {}".format(archive)
-            elif line.startswith(("%setup", "%autosetup")):
-                line = "{} -n {}".format(line, directory)
-            out.append(line)
-
-        out.extend(self._gen_changelog(version, release).split("\n"))
-        return ("\n".join(out), patches.keys())
-
-    def build_srpm(self, workdir):
-        assert self.repo
-        if self.distrepo is None:
-            spec = os.path.join(self.repo.workdir, "{}.spec".format(self.name))
-        else:
-            spec = os.path.join(self.distrepo.workdir, "{}.spec".format(self.name))
-
-        version, release = self._get_ver_rel(self.repo, self.name)
-        prefix = "{}-{}-{}".format(self.name, version, release)
-
-        # Prepare archive
-        archive_prefix = "{}/".format(prefix)
-        archive_name = "{}.tar.xz".format(prefix)
-        archive_path = os.path.join(workdir, archive_name)
-        if ARCHIVE_TYPE == "tar":
-            transform = "s,^{},{},".format(os.path.relpath(self.repo.workdir, start="/"), prefix)
-            subprocess.run(["tar", "--exclude-vcs", "-caf", archive_path,
-                            "--transform", transform, self.repo.workdir
-                           ], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        elif ARCHIVE_TYPE == "pygit2":
-            with tarfile.open(archive_path, "w:xz") as archive:
-                self.repo.write_archive(self.repo[self.repo.head.target], archive,
-                                        prefix=archive_prefix)
-        else:
-            raise NotImplementedError
-        logger.info("Prepared archive with upstream sources: %s", archive_path)
-
-        # Prepare spec
-        _spec, patches = self._prepare_spec(spec,
-                                            version=version,
-                                            release=release,
-                                            archive=archive_name,
-                                            directory=archive_prefix)
-        _spec_path = os.path.join(workdir, "{}.spec".format(self.name))
-        with open(_spec_path, "w") as specfile:
-            specfile.write(_spec)
-            specfile.flush()
-
-        # Copy patches from distgit
-        for patch in patches:
-            shutil.copy2(os.path.join(self.distrepo.workdir, patch),
-                         os.path.join(workdir, patch))
-
-        # Build .src.rpm
-        result = subprocess.run(["rpmbuild", "-bs", _spec_path,
-                                 "--define", "_sourcedir {}".format(workdir),
-                                 "--define", "_srcrpmdir {}".format(workdir),
-                                ], check=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
-        return re.match(r"^Wrote: (.+)$", result.stdout.decode("utf-8")).group(1)
+class DistGit(Git):
+    def __init__(self, component, node):
+        self.patches = PatchesPolicy(node.pop("patches", "keep"))
+        super(DistGit, self).__init__(component, node)
+        self._suffix = "-distgit"
+        _ensure_empty(node)
 
     def __repr__(self):
-        return "<Component {!r} ({!r})>".format(self.name, self.git)
+        return "<DistGit {!r}>".format(self.src_expanded)
 
-def try_prepare(srpm):
-    """
-    :param srpm: Path to SRPM
-    :type srpm: str
-    """
-    with tempfile.TemporaryDirectory(prefix="rgo-prep") as tmp:
-        try:
-            subprocess.run(["rpmbuild", "-rp", srpm, "--nodeps",
-                            "--define", "_builddir {}".format(tmp),
-                           ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        except subprocess.CalledProcessError as result:
-            logger.critical(result.output)
-            raise OverlayException("Failed to execute %prep section")
+class Component(object):
+    def __init__(self, overlay, node):
+        self.overlay = overlay
+
+        self.name = _require_key(node, "name")
+        _ensure_any(node, ["git", "distgit"])
+        self.git = None
+        self.distgit = None
+        if "git" in node:
+            self.git = Git(self, node.pop("git"))
+        if "distgit" in node:
+            self.distgit = DistGit(self, node.pop("distgit"))
+        _ensure_empty(node)
+
+    def resolve(self):
+        if self.git:
+            self.git.resolve()
+        if self.distgit:
+            self.distgit.resolve()
+
+    def build_srpm(self, workdir):
+        """
+        Build SRPM.
+
+        :param str workdir: Working directory
+        :return: Path to .src.rpm
+        :rtype: str
+        """
+        build_cwd = os.path.join(workdir, self.name)
+        os.makedirs(build_cwd)
+        if self.git:
+            if self.distgit:
+                spec = os.path.join(self.distgit.git, "{}.spec".format(self.name))
+            else:
+                spec = os.path.join(self.git.git, "{}.spec".format(self.name))
+
+            # Get version and release
+            version, release = self.git.describe()
+
+            # Prepare archive
+            nvr = "{}-{}-{}".format(self.name, version, release)
+            archive = os.path.join(build_cwd, "{}.tar.xz".format(nvr))
+            logger.debug("Preparing archive %r", archive)
+            out = subprocess.run(["git", "archive", "--prefix={}/".format(nvr),
+                                  "--format=tar", "HEAD"],
+                                 cwd=self.git.git, check=True, stdout=subprocess.PIPE)
+            with open(archive, "w") as f_archive:
+                subprocess.run(["xz", "-z", "--threads=0", "-"],
+                               check=True, input=out.stdout, stdout=f_archive)
+
+            # Prepare new spec
+            if self.distgit:
+                patches = self.distgit.patches
+            else:
+                patches = PatchesPolicy("keep")
+            _spec_path = os.path.join(build_cwd, "{}.spec".format(self.name))
+            with open(_spec_path, "w") as specfile:
+                specfile.write(_prepare_spec(spec, version, release, nvr, patches))
+
+            _patches = []
+            for src, _, src_type in rpm.spec(_spec_path).sources:
+                if src_type == rpm.RPMBUILD_ISPATCH:
+                    _patches.append(src)
+            # Copy patches from distgit
+            for patch in _patches:
+                shutil.copy2(os.path.join(self.distgit.git, patch),
+                             os.path.join(build_cwd, patch))
+
+            # Build .src.rpm
+            result = subprocess.run(["rpmbuild", "-bs", _spec_path, "--nodeps",
+                                     "--define", "_sourcedir {}".format(build_cwd),
+                                     "--define", "_srcrpmdir {}".format(build_cwd)],
+                                    check=True, stdout=subprocess.PIPE)
+            srpm = re.match(r"^Wrote: (.+)$", result.stdout.decode("utf-8")).group(1)
+        elif self.distgit:
+            # Just rebuild from distgit
+            raise NotImplementedError
+
+        return srpm
+
+    def __repr__(self):
+        return "<Component {!r}>".format(self.name)
+
+class Overlay(object):
+    def __init__(self, yml, cwd="."):
+        self.cwd = os.path.realpath(cwd)
+        self.cwd_src = os.path.join(self.cwd, "src")
+
+        self.aliases = []
+        self.components = []
+
+        _ovl = yml.copy()
+
+        for node in _ovl.pop("aliases", []):
+            self.aliases.append(Alias(node))
+        for node in _require_key(_ovl, "components"):
+            self.components.append(Component(self, node))
+
+        _ensure_empty(_ovl)
+
+    def __str__(self):
+        return "<Overlay {!r}>".format(self.cwd)
