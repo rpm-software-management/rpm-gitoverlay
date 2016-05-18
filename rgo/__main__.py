@@ -91,18 +91,18 @@ def main(args=None):
             fatal("Please run 'resolve' first")
         ovl = load_ovl(f_ovl)
         tmpdir = tempfile.mkdtemp(prefix="rpm-gitoverlay", suffix="-build")
-        srpms = {}
+        srpms = []
         for component in ovl.components:
             srpm = component.build_srpm(tmpdir)
             utils.try_prep(srpm)
-            srpms[component] = srpm
+            srpms.append(srpm)
         if args.build_action == "srpm":
-            out = srpms.values()
+            out = srpms
         elif args.build_action == "rpm":
             out = []
             if args.builder == "copr":
                 builder = CoprBuilder(args.owner, args.project, args.chroot or ovl.chroot)
-                for srpm in srpms.values():
+                for srpm in srpms:
                     # TODO: add support for multiple builds at the same time
                     out.extend(builder.build(srpm))
 
