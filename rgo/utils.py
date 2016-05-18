@@ -39,6 +39,7 @@ def _require_key(node, key):
     """
     :param dict node: Node
     :param str key: Key
+    :return: Value for the key
     :raises KeyError: if node doesn't contain key
     """
     if key not in node:
@@ -52,7 +53,18 @@ def _ensure_any(node, keys):
     :raises KeyError: if node doesn't contain at least 1 of keys
     """
     if not any(k in node for k in keys):
-        raise KeyError
+        raise KeyError("At least one of keys is required: {}".format(", ".join(keys)))
+
+def _ensure_one(node, keys):
+    """
+    :param dict node: Node
+    :param list keys: Keys
+    :raises KeyError: if node contains less/more than 1 of keys
+    """
+    specified = [k for k in keys if k in node]
+    if len(specified) > 1:
+        _specified = (repr(k) for k in specified)
+        raise KeyError("Only one of keys should be used: {}".format(", ".join(specified)))
 
 def _ensure_empty(node):
     """
@@ -169,7 +181,9 @@ class Git(object):
         self.git = None
 
         self.src = _require_key(node, "src")
+        _ensure_one(node, ["freeze", "branch"])
         self.freeze = node.pop("freeze", None)
+        self.branch = node.pop("branch", None)
         _ensure_empty(node)
 
     def resolve(self):
@@ -178,8 +192,8 @@ class Git(object):
                                 "{}{}".format(self.component.name, self._suffix))
         logger.debug("Cloning %r into %r", self.src_expanded, self.git)
         subprocess.run(["git", "clone", self.src_expanded, self.git], check=True)
-        if self.freeze:
-            subprocess.run(["git", "checkout", self.freeze],
+        if self.freeze or self.branch:
+            subprocess.run(["git", "checkout", self.freeze or self.branch],
                            cwd=self.git, check=True)
 
     def describe(self):
