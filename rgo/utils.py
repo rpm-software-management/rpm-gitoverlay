@@ -385,6 +385,7 @@ class Overlay(object):
 
         self.aliases = []
         self.components = []
+        self.chroot = _require_key(yml, "chroot")
 
         _ovl = yml.copy()
 

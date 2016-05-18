@@ -58,6 +58,7 @@ def main(args=None):
     action.add_parser("resolve", help="Clone repos, do checkout, etc.")
     build = action.add_parser("build", help="Build")
     build.add_argument("-o", "--output", help="Output file for list of (S)RPMs")
+    build.add_argument("--chroot", help="Chroot to build for")
     build_action = build.add_subparsers(help="What to build", dest="build_action")
     build_action.required = True
     srpm = build_action.add_parser("srpm", help="Build SRPMs")
@@ -100,12 +101,10 @@ def main(args=None):
         elif args.build_action == "rpm":
             out = []
             if args.builder == "copr":
-                builder = CoprBuilder()
-                project = builder.mkproject(args.owner, args.project)
-                logger.debug("Project URL: %r", builder.get_project_url(project))
+                builder = CoprBuilder(args.owner, args.project, args.chroot or ovl.chroot)
                 for srpm in srpms.values():
                     # TODO: add support for multiple builds at the same time
-                    out.extend(builder.build_from_srpm(project, srpm))
+                    out.extend(builder.build(srpm))
 
         if args.output:
             with open(args.output, "w") as f_out:

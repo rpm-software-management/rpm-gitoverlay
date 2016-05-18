@@ -15,7 +15,6 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from datetime import datetime
 import time
 from urllib.parse import urljoin
 
@@ -24,71 +23,65 @@ import copr
 import requests
 
 from .. import logger
-from ..exceptions import OverlayException
 
 class CoprBuilder(object):
-    def __init__(self, chroots=("fedora-24-x86_64",), enable_net=False):
+    def __init__(self, owner, name=None, chroot="fedora-rawhide-x86_64", enable_net=False):
         """
-        :param chroots: Project chroots
-        :type chroots: tuple(str, ...)
+        :param owner: Project owner
+        :type owner: str
+        :param name: Project name
+        :type name: str
+        :param chroot: Project chroot
+        :type chroot: str
         :param enable_net: Enable internet during build, it's better to disable
         :type enable_net: bool
         """
-        self.client = copr.client_v2.client.CoprClient.create_from_file_config()
-        self.chroots = chroots
+        # FIXME: python-copr doesn't support group projects
+        # https://bugzilla.redhat.com/show_bug.cgi?id=1337247
+        if owner.startswith("@"):
+            raise NotImplementedError("Group projects are not supported in python-copr")
+
+        self.client = copr.create_client2_from_file_config()
+        if chroot not in (c.name for c in self.client.mock_chroots.get_list(active_only=True)):
+            raise Exception("{!r} doesn't seem to be active chroot".format(chroot))
         self.enable_net = enable_net
-
-    def mkproject(self, owner, name=None):
-        """
-        Create or get project in COPR.
-
-        :param owner: Project owner
-        :type owner: str
-        :param name: Project name, if not specified will be generated randomly
-        :type name: str | None
-        """
-        if name is None:
-            now = datetime.now()
-            name = "rpm-gitoverlay-{}".format(now.strftime("%Y%m%d%H%M%S%f"))
+        if not name:
+            name = "rpm-gitoverlay-{}".format(time.time())
         projects = self.client.projects.get_list(owner=owner, name=name, limit=1)
         if not projects:
-            project = self.client.projects.create(name=name,
-                                                  owner=owner,
-                                                  chroots=self.chroots,
-                                                  build_enable_net=self.enable_net,
-                                                  description="RPM git-overlay")
-            logger.info("Created COPR project: %s/%s", owner, name)
+            self.project = self.client.projects.create(owner=owner, name=name,
+                                                       chroots=[chroot],
+                                                       build_enable_net=self.enable_net)
+            logger.info("Created COPR project: %s/%s",
+                        self.project.owner, self.project.name)
         else:
-            logger.info("Using existing project: %s/%s", owner, name)
-            project = projects.projects[0]
+            self.project = projects[0]
+            logger.info("Using existing COPR project: %s/%s",
+                        self.project.owner, self.project.name)
+            if chroot not in (c.name for c in self.project.get_project_chroot_list()):
+                raise Exception("{!r} chroot is not enabled for COPR project".format(chroot))
+        self.chroot = chroot
+        logger.info("COPR Project URL: %r", self.get_project_url())
 
-        return project
-
-    def get_project_url(self, project):
+    def get_project_url(self):
         # FIXME: uncomment once upstream will implement it
         #if project.group:
         #    url = "/coprs/g/{p.group}/{p.name}"
         #else:
         url = "/coprs/{p.owner}/{p.name}"
-        return urljoin(self.client.root_url, url.format(p=project))
+        return urljoin(self.client.root_url, url.format(p=self.project))
 
-    def build_from_srpm(self, project, srpm):
+    def build(self, srpm):
         """
-        Build SRPM in COPR.
+        Build SRPM.
 
-        :param project: COPR Project
-        :type project: copr.client_v2.resources.Project
         :param srpm: Path to .src.rpm to build
         :type srpm: str
         :return: URLs to RPMs
-        :rtype: list(str, ...)
+        :rtype: list
         """
-        if len(self.chroots) > 1:
-            raise NotImplementedError
-
-        build = project.create_build_from_file(file_path=srpm,
-                                               chroots=self.chroots,
-                                               enable_net=self.enable_net)
+        build = self.project.create_build_from_file(file_path=srpm, chroots=[self.chroot],
+                                                    enable_net=self.enable_net)
 
         success = True
         # Wait for build to complete
@@ -99,19 +92,15 @@ class CoprBuilder(object):
                 _done = task.state not in ("running", "pending", "starting", "importing")
                 if _done:
                     if task.state == "failed":
-                        logger.warning("Build #%d (chroot: %r): failed",
-                                       build.id, task.chroot_name)
                         success = False
+                        logger.warning("Build #%d: failed", build.id)
                     elif task.state == "succeeded":
-                        logger.info("Build #%d (chroot: %r): succeeded",
-                                    build.id, task.chroot_name)
+                        logger.info("Build #%d: succeeded", build.id)
                     else:
                         success = False
-                        raise OverlayException("Build #%d (chroot: %r): %r",
-                                               build.id, task.chroot_name, task.state)
+                        raise Exception("Build #{:d}: {!s}".format(build.id, task.state))
                 else:
-                    logger.debug("Build #%d (chroot: %r): %r",
-                                 build.id, task.chroot_name, task.state)
+                    logger.debug("Build #%d: %s", build.id, task.state)
 
                 done.add(_done)
 
@@ -135,6 +124,6 @@ class CoprBuilder(object):
 
         if not success:
             # TODO: improve message
-            raise OverlayException("Build failed")
+            raise Exception("Build failed")
 
         return rpms

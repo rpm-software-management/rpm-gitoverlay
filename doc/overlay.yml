@@ -5,6 +5,8 @@ aliases:
   - name: fedorapkgs
     url: git://pkgs.fedoraproject.org/rpms/
 
+chroot: fedora-rawhide-x86_64
+
 components:
   - name: libsolv
     git:
