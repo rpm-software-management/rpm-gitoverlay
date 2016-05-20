@@ -342,6 +342,20 @@ class Component(object):
             # Get version and release
             version, release = self.git.describe()
 
+            # If spec is located in upstream it's possible that version can be changed
+            # which means we also should align it here.
+            if not self.distgit:
+                _version = rpm.spec(spec).sourceHeader["Version"].decode("utf-8")
+                logger.debug("Version in upstream spec file: %r", _version)
+                if rpm.labelCompare((None, _version, None), (None, version, None)) == 1:
+                    # Version in spec > than from git tags
+                    logger.debug("Setting version from upstream spec file")
+                    version = _version
+                    # FIXME: Add prefix 0. to indicate that it was not released yet
+                    # There are no reliable way to get in which commit version was set
+                    # except iterating over commits
+                    release = "0.{}".format(release)
+
             # Prepare archive
             nvr = "{}-{}-{}".format(self.name, version, release)
             archive = os.path.join(build_cwd, "{}.tar.xz".format(nvr))
