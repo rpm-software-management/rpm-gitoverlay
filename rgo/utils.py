@@ -64,7 +64,7 @@ def _ensure_one(node, keys):
     specified = [k for k in keys if k in node]
     if len(specified) > 1:
         _specified = (repr(k) for k in specified)
-        raise KeyError("Only one of keys should be used: {}".format(", ".join(specified)))
+        raise KeyError("Only one of keys should be used: {}".format(", ".join(_specified)))
 
 def _ensure_empty(node):
     """
