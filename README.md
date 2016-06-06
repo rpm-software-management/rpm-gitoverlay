@@ -55,9 +55,9 @@ Only one of following parameters can be chosen:
 
 #### `distgit` structure:
 
-| Parameter | Required | Type | Comments                                                                        |
-|-----------|----------|------|---------------------------------------------------------------------------------|
-| patches   | no       | str  | What to do with patches: `keep` to keep all patches, `drop` to drop all patches |
+| Parameter | Required | Type | Comments                                              |
+|-----------|----------|------|-------------------------------------------------------|
+| patches   | no       | str  | What to do with patches: `keep` (**default**), `drop` |
 
 Plus all parameters from `git` structure.
 
