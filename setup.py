@@ -16,9 +16,11 @@ setup(
         ]
     },
     install_requires=["PyYAML"],
+    setup_require=["nose"],
     extras_require={
         "copr": ["copr", "requests", "beautifulsoup4"],
     },
+    test_suite="nose.collector",
     classifiers=[
         "Development Status :: 2 - Pre-Alpha",
         "Intended Audience :: Developers",

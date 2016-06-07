@@ -2,6 +2,14 @@
 
 Manage an overlay repository of RPMs from upstream git.
 
+## Running unit tests
+
+Without coverage:
+`$ python3 setup.py test`
+
+With coverage:
+`$ python3 setup.py nosetests`
+
 ## Usage
 
 1. Create `overlay.yml` file (see reference below)

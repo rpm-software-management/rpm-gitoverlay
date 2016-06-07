@@ -2,3 +2,5 @@
 /rpm_gitoverlay.egg-info/
 /dist/
 __pycache__/
+/.coverage
+/htmlcov/
