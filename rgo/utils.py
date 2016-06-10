@@ -181,6 +181,49 @@ def try_prep(srpm):
                         "--define", "_builddir {}".format(tmp)],
                        check=True)
 
+def git_describe(repo, pkgname=None):
+    """
+    Get version and release from git repository based on git-describe.
+
+    :param str repo: Path to git repository
+    :param str pkgname: Package name
+    :return: Version and Release
+    :rtype: tuple
+    """
+    out = subprocess.run(["git", "describe", "--tags", "--always"],
+                         cwd=repo, check=True, stdout=subprocess.PIPE)
+    ver = out.stdout.decode("utf-8").rstrip()
+    if pkgname is not None:
+        ver = remove_prefix(ver, pkgname, True)
+        ver = remove_prefix(ver, pkgname.replace("-", "_"), True)
+        ver = remove_prefix(ver, "-")
+        ver = remove_prefix(ver, "_")
+    ver = remove_prefix(ver, "v")
+    out = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
+                         cwd=repo, check=True, stdout=subprocess.PIPE)
+    commit = out.stdout.decode("ascii").rstrip()
+    if ver.endswith("-g{}".format(commit)):
+        # -X-gYYYYYYY
+        tmp = ver.rsplit("-", 2)
+        version = tmp[0]
+        release = "{}{}".format(tmp[1], tmp[2])
+    elif ver == commit:
+        # YYYYYYY
+        version = "0"
+        # Number of commits since the beginning (as we didn't have tags yet)
+        out = subprocess.run(["git", "rev-list", "--count", "HEAD"],
+                             cwd=repo, check=True, stdout=subprocess.PIPE)
+        release = "{}g{}".format(out.stdout.decode("ascii").rstrip(), commit)
+    else:
+        # tag
+        version = ver
+        release = "1"
+    # often (in GNOME) tags are like GNOME_BUILDER_3_21_1
+    version = version.replace("_", ".")
+    # Sometimes there is "-" in version which is not allowed
+    version = version.replace("-", "_")
+    return (version, release)
+
 class Alias(object):
     def __init__(self, node):
         self.name = _require_key(node, "name")
@@ -216,42 +259,10 @@ class Git(object):
         """
         Get version and release from upstream git repository.
 
-        :return: Version and Release
-        :rtype: tuple(str, str)
+        .. seealso:: function :py:func:`rgo.utils.git_describe`
         """
         assert self.git
-        out = subprocess.run(["git", "describe", "--tags", "--always"],
-                             cwd=self.git, check=True, stdout=subprocess.PIPE)
-        ver = out.stdout.decode("utf-8").rstrip()
-        ver = remove_prefix(ver, self.component.name, True)
-        ver = remove_prefix(ver, self.component.name.replace("-", "_"), True)
-        ver = remove_prefix(ver, "v")
-        ver = remove_prefix(ver, "-")
-        ver = remove_prefix(ver, "_")
-        out = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
-                             cwd=self.git, check=True, stdout=subprocess.PIPE)
-        commit = out.stdout.decode("ascii").rstrip()
-        if ver.endswith("-g{}".format(commit)):
-            # -X-gYYYYYYY
-            tmp = ver.rsplit("-", 2)
-            version = tmp[0]
-            release = "{}{}".format(tmp[1], tmp[2])
-        elif ver == commit:
-            # YYYYYYY
-            version = "0"
-            # Number of commits since the beginning (as we didn't have tags yet)
-            out = subprocess.run(["git", "rev-list", "--count", "HEAD"],
-                                 cwd=self.git, check=True, stdout=subprocess.PIPE)
-            release = "{}g{}".format(out.stdout.decode("ascii").rstrip(), commit)
-        else:
-            # tag
-            version = ver
-            release = "1"
-        # often (in GNOME) tags are like GNOME_BUILDER_3_21_1
-        version = version.replace("_", ".")
-        # Sometimes there is "-" in version which is not allowed
-        version = version.replace("-", "_")
-        return (version, release)
+        return git_describe(self.git, self.component.name)
 
     def __repr__(self):
         return "<Git {!r}>".format(self.src_expanded)
