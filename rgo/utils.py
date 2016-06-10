@@ -152,6 +152,22 @@ def _prepare_spec(spec, version, release, prefix, patches):
     out.extend(_gen_changelog(version, release).split("\n"))
     return "\n".join(out)
 
+def remove_prefix(text, prefix, ignore_case=False):
+    """
+    Remove prefix from text.
+
+    :param str text: Text
+    :param str prefix: Prefix to remove
+    :param bool ignore_case: Make prefix case-insensitive for removal
+    :return: Text without prefix
+    :rtype: str
+    """
+    if (ignore_case and re.match(prefix, text, re.I)) or \
+       (not ignore_case and text.startswith(prefix)):
+        return text[len(prefix):]
+    else:
+        return text
+
 def try_prep(srpm):
     """
     Try %prep on .src.rpm.
@@ -206,13 +222,12 @@ class Git(object):
         assert self.git
         out = subprocess.run(["git", "describe", "--tags", "--always"],
                              cwd=self.git, check=True, stdout=subprocess.PIPE)
-        ver = out.stdout.decode("utf-8").rstrip().lower()
-        chop = lambda v, s: v[len(s):] if v.startswith(s) else v
-        ver = chop(ver, self.component.name)
-        ver = chop(ver, self.component.name.replace("_", "-"))
-        ver = chop(ver, "v")
-        ver = chop(ver, "-")
-        ver = chop(ver, "_")
+        ver = out.stdout.decode("utf-8").rstrip()
+        ver = remove_prefix(ver, self.component.name, True)
+        ver = remove_prefix(ver, self.component.name.replace("-", "_"), True)
+        ver = remove_prefix(ver, "v")
+        ver = remove_prefix(ver, "-")
+        ver = remove_prefix(ver, "_")
         out = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
                              cwd=self.git, check=True, stdout=subprocess.PIPE)
         commit = out.stdout.decode("ascii").rstrip()
