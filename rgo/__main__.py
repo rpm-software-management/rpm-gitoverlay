@@ -18,6 +18,7 @@
 import argparse
 import logging
 import os
+import shutil
 import sys
 import tempfile
 
@@ -105,6 +106,10 @@ def main(args=None):
                 for srpm in srpms:
                     # TODO: add support for multiple builds at the same time
                     out.extend(builder.build(srpm))
+                    # We can always get SRPM from COPR
+                    os.remove(srpm)
+            # Everything built successfully, we can remove temp directory
+            shutil.rmtree(tmpdir)
 
         if args.output:
             with open(args.output, "w") as f_out:
