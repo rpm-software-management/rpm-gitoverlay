@@ -41,6 +41,15 @@ class TestGitUtils(object):
         """
         subprocess.run(["git", "tag", name], cwd=self.repo, check=True)
 
+    def test_get_latest_tag(self):
+        self.commit()
+        tools.assert_raises(utils.GitNoTags, utils.git_get_latest_tag, self.repo)
+        self.tag("0.1")
+        tools.eq_(utils.git_get_latest_tag(self.repo), "0.1")
+        self.commit()
+        tools.eq_(utils.git_get_latest_tag(self.repo), "0.1")
+
+class TestGitDescribe(TestGitUtils):
     def test_no_tags(self):
         self.commit()
         tools.eq_(utils.git_describe(self.repo), ("0", "1g{}".format(self.sha1)))
@@ -69,11 +78,3 @@ class TestGitUtils(object):
         self.commit()
         self.tag("GNOME_BUILDER_3_21_1")
         tools.eq_(utils.git_describe(self.repo, "gnome-builder"), ("3.21.1", "1"))
-
-    def test_get_latest_tag(self):
-        self.commit()
-        tools.assert_raises(utils.GitNoTags, utils.git_get_latest_tag, self.repo)
-        self.tag("0.1")
-        tools.eq_(utils.git_get_latest_tag(self.repo), "0.1")
-        self.commit()
-        tools.eq_(utils.git_get_latest_tag(self.repo), "0.1")
