@@ -43,35 +43,32 @@ class TestGitUtils(object):
 
     def test_no_tags(self):
         self.commit()
-        tools.assert_equal(utils.git_describe(self.repo),
-                           ("0", "1g{}".format(self.sha1)))
+        tools.eq_(utils.git_describe(self.repo), ("0", "1g{}".format(self.sha1)))
 
     def test_tag(self):
         self.commit()
         self.tag("0.1")
-        tools.assert_equal(utils.git_describe(self.repo), ("0.1", "1"))
+        tools.eq_(utils.git_describe(self.repo), ("0.1", "1"))
 
     def test_after_tag(self):
         self.commit()
         self.tag("0.1")
         self.commit()
         self.commit()
-        tools.assert_equal(utils.git_describe(self.repo),
-                           ("0.1", "2g{}".format(self.sha1)))
+        tools.eq_(utils.git_describe(self.repo), ("0.1", "2g{}".format(self.sha1)))
 
     def test_with_prefix(self):
         self.commit()
         self.tag("v0.1")
-        tools.assert_equal(utils.git_describe(self.repo), ("0.1", "1"))
+        tools.eq_(utils.git_describe(self.repo), ("0.1", "1"))
 
         self.commit()
         self.tag("test-0.1")
-        tools.assert_equal(utils.git_describe(self.repo, "test"), ("0.1", "1"))
+        tools.eq_(utils.git_describe(self.repo, "test"), ("0.1", "1"))
 
         self.commit()
         self.tag("GNOME_BUILDER_3_21_1")
-        tools.assert_equal(utils.git_describe(self.repo, "gnome-builder"),
-                           ("3.21.1", "1"))
+        tools.eq_(utils.git_describe(self.repo, "gnome-builder"), ("3.21.1", "1"))
 
     def test_get_latest_tag(self):
         self.commit()
