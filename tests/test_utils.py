@@ -6,7 +6,7 @@ from rgo import utils
 
 from nose import tools
 
-class TestGitDescribe(object):
+class TestGitUtils(object):
     def setUp(self):
         self.repo = tempfile.mkdtemp(prefix="rgo-test")
         subprocess.run(["git", "init"],
@@ -24,15 +24,22 @@ class TestGitDescribe(object):
         return result.stdout.decode("ascii").rstrip()
 
     def commit(self, msg="test"):
+        """
+        Create dummy commit.
+
+        :param str msg: Commit message
+        """
         subprocess.run(["git", "commit", "--allow-empty", "-m", msg],
                        cwd=self.repo, check=True,
                        stdout=subprocess.DEVNULL)
 
     def tag(self, name):
-        subprocess.run(["git", "tag", name], cwd=self.repo, check=True)
+        """
+        Create tag.
 
-    def describe(self):
-        return utils.git_describe(self.repo)
+        :param str name: Name of tag
+        """
+        subprocess.run(["git", "tag", name], cwd=self.repo, check=True)
 
     def test_no_tags(self):
         self.commit()
@@ -65,3 +72,11 @@ class TestGitDescribe(object):
         self.tag("GNOME_BUILDER_3_21_1")
         tools.assert_equal(utils.git_describe(self.repo, "gnome-builder"),
                            ("3.21.1", "1"))
+
+    def test_get_latest_tag(self):
+        self.commit()
+        tools.assert_raises(utils.GitNoTags, utils.git_get_latest_tag, self.repo)
+        self.tag("0.1")
+        tools.eq_(utils.git_get_latest_tag(self.repo), "0.1")
+        self.commit()
+        tools.eq_(utils.git_get_latest_tag(self.repo), "0.1")

@@ -27,6 +27,10 @@ import rpm
 
 from . import logger
 
+class GitNoTags(Exception):
+    def __init__(self, repo):
+        super().__init__("No tags found in current branch of git repo at {!r}".format(repo))
+
 class PatchesPolicy(enum.Enum):
     keep = "keep"
     drop = "drop"
@@ -181,6 +185,50 @@ def try_prep(srpm):
                         "--define", "_builddir {}".format(tmp)],
                        check=True)
 
+def git_get_commit(repo, short=True):
+    """
+    Get current commit from git repository.
+
+    :param str repo: Path to git repository
+    :param bool short: Use short-format (7 symbols)
+    :return: Commit hash
+    :rtype: str
+    """
+    args = ["git", "rev-parse"]
+    if short:
+        args.append("--short")
+    args.append("HEAD")
+    out = subprocess.run(args, cwd=repo, check=True, stdout=subprocess.PIPE)
+    return out.stdout.decode("ascii").rstrip()
+
+def git_get_latest_tag(repo):
+    """
+    Get latest tag from git repository in the current branch.
+
+    :param str repo: Path to git repository
+    :return: Tag name
+    :rtype: str
+    :raises rgo.utils.GitNoTags: if no tags found
+    """
+    out = subprocess.run(["git", "describe", "--tags", "--always", "--abbrev=0"],
+                         cwd=repo, check=True, stdout=subprocess.PIPE)
+    tag = out.stdout.decode("utf-8").rstrip()
+    commit = git_get_commit(repo, False)
+    # tag == commit in case there are no tags in this branch
+    if tag != commit:
+        return tag
+    else:
+        raise GitNoTags(repo)
+
+def git_checkout(repo, point):
+    """
+    Do checkout in git repository.
+
+    :param str repo: Path to git repository
+    :param str point: Point to checkout on (tag, commit, branch)
+    """
+    subprocess.run(["git", "checkout", point], cwd=repo, check=True)
+
 def git_describe(repo, pkgname=None):
     """
     Get version and release from git repository based on git-describe.
@@ -199,9 +247,7 @@ def git_describe(repo, pkgname=None):
         ver = remove_prefix(ver, "-")
         ver = remove_prefix(ver, "_")
     ver = remove_prefix(ver, "v")
-    out = subprocess.run(["git", "rev-parse", "--short", "HEAD"],
-                         cwd=repo, check=True, stdout=subprocess.PIPE)
-    commit = out.stdout.decode("ascii").rstrip()
+    commit = git_get_commit(repo)
     if ver.endswith("-g{}".format(commit)):
         # -X-gYYYYYYY
         tmp = ver.rsplit("-", 2)
@@ -241,8 +287,10 @@ class Git(object):
 
         self.src = _require_key(node, "src")
         _ensure_one(node, ["freeze", "branch"])
+        _ensure_one(node, ["freeze", "latest-tag"])
         self.freeze = node.pop("freeze", None)
         self.branch = node.pop("branch", None)
+        self.latest_tag = node.pop("latest-tag", False)
         _ensure_empty(node)
 
     def resolve(self):
@@ -252,8 +300,11 @@ class Git(object):
         logger.debug("Cloning %r into %r", self.src_expanded, self.git)
         subprocess.run(["git", "clone", self.src_expanded, self.git], check=True)
         if self.freeze or self.branch:
-            subprocess.run(["git", "checkout", self.freeze or self.branch],
-                           cwd=self.git, check=True)
+            git_checkout(self.git, self.freeze or self.branch)
+        if self.latest_tag:
+            tag = git_get_latest_tag(self.git)
+            if tag is not None:
+                git_checkout(self.git, tag)
 
     def describe(self):
         """
