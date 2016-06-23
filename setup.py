@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="rpm-gitoverlay",
-    version="0.0.1",
+    version="0",
     author="Igor Gnatenko",
     author_email="ignatenko@redhat.com",
     url="https://github.com/ignatenkobrain/rpm-gitoverlay",
