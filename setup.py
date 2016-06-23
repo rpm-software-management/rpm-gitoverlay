@@ -16,7 +16,7 @@ setup(
         ]
     },
     install_requires=["PyYAML"],
-    setup_require=["nose"],
+    setup_requires=["nose"],
     extras_require={
         "copr": ["copr", "requests", "beautifulsoup4"],
     },
