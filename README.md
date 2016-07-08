@@ -13,11 +13,7 @@ With coverage:
 ## Usage
 
 1. Create `overlay.yml` file (see reference below)
-2. Resolve (`rpm-gitoverlay resolve`). It will clone repos into `src` subdirectory, do checkouts.
-3. Build. It will build SRPMs or RPMs (`rpm-gitoverlay build`).
-   * SRPMs: `rpm-gitoverlay build srpm`
-   * RPMs:
-     * Build using [COPR](https://fedorahosted.org/copr/): `rpm-gitoverlay build rpm copr --help`
+2. Build: Every option is self-discoverable, just run `rpm-gitoverlay --help`
 
 ## `overlay.yml` refenrece
 
@@ -65,9 +61,10 @@ In case `latest-tag` is `True` and there are no git tags in used branch - except
 
 #### `distgit` structure:
 
-| Parameter | Required | Type | Comments                                              |
-|-----------|----------|------|-------------------------------------------------------|
-| patches   | no       | str  | What to do with patches: `keep` (**default**), `drop` |
+| Parameter | Required | Type | Comments                                                                        |
+|-----------|----------|------|---------------------------------------------------------------------------------|
+| patches   | no       | str  | What to do with patches: `keep` (**default**), `drop`                           |
+| type      | no       | str  | What type of distgit it is?: `auto` (**default**), `dist-git`, `git-lfs`, `git` |
 
 Plus all parameters from `git` structure.
 

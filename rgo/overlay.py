@@ -14,3 +14,17 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
+
+from . import alias
+
+class Overlay(object):
+    def __init__(self, components, aliases=None):
+        """
+        :param list components: List of rgo.component.Component
+        :param rgo.alias.Aliases aliases: List of aliases for git
+        """
+        self.components = components
+        self.aliases = aliases or alias.Aliases(())
+
+    def __repr__(self): # pragma: no cover
+        return "<Overlay components({0.components!r}) aliases({0.aliases!r})>".format(self)

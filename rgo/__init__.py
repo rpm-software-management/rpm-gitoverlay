@@ -17,4 +17,4 @@
 
 import logging
 
-logger = logging.getLogger("rpm-gitoverlay")
+LOGGER = logging.getLogger("rpm-gitoverlay")

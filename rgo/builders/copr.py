@@ -17,24 +17,18 @@
 
 import time
 from urllib.parse import urljoin
-
 import bs4
 import copr
 import requests
-
-from .. import logger
+from .. import LOGGER
 
 class CoprBuilder(object):
     def __init__(self, owner, name=None, chroot="fedora-rawhide-x86_64", enable_net=False):
-        """
-        :param owner: Project owner
-        :type owner: str
-        :param name: Project name
-        :type name: str
-        :param chroot: Project chroot
-        :type chroot: str
-        :param enable_net: Enable internet during build, it's better to disable
-        :type enable_net: bool
+        """Build RPMs in COPR.
+        :param str owner: Project owner
+        :param str name: Project name
+        :param str chroot: Project chroot
+        :param bool enable_net: Enable internet during build (better to disable)
         """
         # FIXME: python-copr doesn't support group projects
         # https://bugzilla.redhat.com/show_bug.cgi?id=1337247
@@ -46,24 +40,25 @@ class CoprBuilder(object):
             raise Exception("{!r} doesn't seem to be active chroot".format(chroot))
         self.enable_net = enable_net
         if not name:
-            name = "rpm-gitoverlay-{}".format(time.time())
+            name = "rpm-gitoverlay-{:f}".format(time.time())
         projects = self.client.projects.get_list(owner=owner, name=name, limit=1)
         if not projects:
             self.project = self.client.projects.create(owner=owner, name=name,
                                                        chroots=[chroot],
                                                        build_enable_net=self.enable_net)
-            logger.info("Created COPR project: %s/%s",
+            LOGGER.info("Created COPR project: %s/%s",
                         self.project.owner, self.project.name)
         else:
             self.project = projects[0]
-            logger.info("Using existing COPR project: %s/%s",
+            LOGGER.info("Using existing COPR project: %s/%s",
                         self.project.owner, self.project.name)
             if chroot not in (c.name for c in self.project.get_project_chroot_list()):
                 raise Exception("{!r} chroot is not enabled for COPR project".format(chroot))
         self.chroot = chroot
-        logger.info("COPR Project URL: %r", self.get_project_url())
+        LOGGER.info("COPR Project URL: %r", self.project_url)
 
-    def get_project_url(self):
+    @property
+    def project_url(self):
         # FIXME: uncomment once upstream will implement it
         #if project.group:
         #    url = "/coprs/g/{p.group}/{p.name}"
@@ -72,12 +67,9 @@ class CoprBuilder(object):
         return urljoin(self.client.root_url, url.format(p=self.project))
 
     def build(self, srpm):
-        """
-        Build SRPM.
-
-        :param srpm: Path to .src.rpm to build
-        :type srpm: str
-        :return: URLs to RPMs
+        """Build RPM(s) from SRPM.
+        :param str srpm: Path to .src.rpm to build
+        :return: URL(s) to RPM(s)
         :rtype: list
         """
         build = self.project.create_build_from_file(file_path=srpm, chroots=[self.chroot],
@@ -93,14 +85,14 @@ class CoprBuilder(object):
                 if _done:
                     if task.state == "failed":
                         success = False
-                        logger.warning("Build #%d: failed", build.id)
+                        LOGGER.warning("Build #%d: failed", build.id)
                     elif task.state == "succeeded":
-                        logger.info("Build #%d: succeeded", build.id)
+                        LOGGER.info("Build #%d: succeeded", build.id)
                     else:
                         success = False
                         raise Exception("Build #{:d}: {!s}".format(build.id, task.state))
                 else:
-                    logger.debug("Build #%d: %s", build.id, task.state)
+                    LOGGER.debug("Build #%d: %s", build.id, task.state)
 
                 done.add(_done)
 
