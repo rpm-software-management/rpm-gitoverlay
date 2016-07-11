@@ -79,7 +79,14 @@ class Git(object):
         proc = subprocess.run(["git", "show", "-s", "--format=%ct", self.ref],
                               cwd=self.cwd, check=True, universal_newlines=True,
                               stdout=subprocess.PIPE)
-        return float(proc.stdout.rstrip())
+        # if there is a tag here, git returns more than one line, so we just take last line
+        # $ git show -s --format=%ct 0.6.22
+        # tag 0.6.22
+        # Tagger: Michael Schroeder <mls@suse.de>
+        #
+        # 0.6.22
+        # 1465385134
+        return float(proc.stdout.rstrip().split()[-1])
 
     @property
     def url(self):
