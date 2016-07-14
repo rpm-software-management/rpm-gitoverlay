@@ -40,6 +40,7 @@ def add_build_actions(parser):
     rpm_parser = argparse.ArgumentParser(add_help=False)
     builder = rpm_parser.add_subparsers(help="Builder", dest="builder")
     builder.required = True
+    builder.add_parser("rpmbuild", help="Build using rpmbuild")
     copr = builder.add_parser("copr", help="Build using COPR")
     copr.add_argument("--owner", help="COPR project owner", required=True)
     copr.add_argument("--project", help="COPR project name")
@@ -126,15 +127,17 @@ def main():
         if args.builder == "copr":
             from rgo.builders.copr import CoprBuilder
             builder = CoprBuilder(args.owner, args.project, args.chroot or ovl.chroot)
-            for srpm in srpms:
-                # TODO: add support for multiple builds at the same time
-                out.extend(builder.build(srpm))
-                # We can always get SRPM from COPR
-                os.remove(srpm)
+        elif args.builder == "rpmbuild":
+            from rgo.builders.rpmbuild import RpmBuilder
+            builder = RpmBuilder()
         else:
             shutil.rmtree(tmpdir)
             raise NotImplementedError
-        out = rpms
+        for srpm in srpms:
+            # TODO: add support for multiple builds at the same time
+            out.extend(builder.build(srpm))
+            # We don't care about SRPM anymore
+            os.remove(srpm)
         # Everything built successfully, we can remove temp directory
         shutil.rmtree(tmpdir)
     else:
