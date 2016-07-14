@@ -20,6 +20,11 @@ Requires:       python3-marshmallow-enum
 Requires:       rpm-python3
 Requires:       python3-PyYAML
 Requires:       git-core
+# Archives are always in tar.xz
+Requires:       /usr/bin/tar
+Requires:       /usr/bin/xz
+# For building SRPMs
+Requires:       /usr/bin/rpmbuild
 # COPR builder
 Requires:       python3-beautifulsoup4
 Requires:       python3-copr
