@@ -22,9 +22,7 @@ import shutil
 import sys
 import tempfile
 import yaml
-import rgo.schema
-import rgo.utils
-from . import LOGGER
+from . import LOGGER, schema, utils
 
 def setup_logger(loglevel=None):
     if loglevel:
@@ -35,7 +33,7 @@ def setup_logger(loglevel=None):
     LOGGER.addHandler(handler)
 
 def load_overlay(json):
-    return rgo.schema.OverlaySchema().load(json).data
+    return schema.OverlaySchema().load(json).data
 
 def add_build_actions(parser):
     chroot_parser = argparse.ArgumentParser(add_help=False)
@@ -119,7 +117,7 @@ def main():
         shutil.move(_srpm, srpm)
         srpms.append(srpm)
         shutil.rmtree(tmp_c)
-        rgo.utils.try_prep(srpm)
+        utils.try_prep(srpm)
 
     if args.build_action == "srpm":
         out = srpms
