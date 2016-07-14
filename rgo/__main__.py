@@ -16,6 +16,7 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import logging
 import os
 import shutil
 import sys
@@ -23,11 +24,11 @@ import tempfile
 import yaml
 import rgo.schema
 import rgo.utils
+from . import LOGGER
 
-def setup_logger(loglevel):
-    import logging
-    from . import LOGGER
-    LOGGER.setLevel(getattr(logging, loglevel.upper()))
+def setup_logger(loglevel=None):
+    if loglevel:
+        LOGGER.setLevel(getattr(logging, loglevel))
     handler = logging.StreamHandler()
     formatter = logging.Formatter("{asctime!s}:{levelname!s}: {message!s}", style="{")
     handler.setFormatter(formatter)
@@ -74,8 +75,7 @@ def main():
     add_build_actions(ovl_builder)
 
     args = parser.parse_args()
-    if args.log:
-        setup_logger(args.log)
+    setup_logger(args.log)
 
     args.gitdir = os.path.abspath(args.gitdir)
     if not os.path.isdir(args.gitdir):
