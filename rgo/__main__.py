@@ -37,18 +37,20 @@ def load_overlay(json):
     return rgo.schema.OverlaySchema().load(json).data
 
 def add_build_actions(parser):
+    chroot_parser = argparse.ArgumentParser(add_help=False)
+    chroot_parser.add_argument("--chroot", help="Chroot to build for", required=True)
+
     rpm_parser = argparse.ArgumentParser(add_help=False)
     builder = rpm_parser.add_subparsers(help="Builder", dest="builder")
     builder.required = True
     builder.add_parser("rpmbuild", help="Build using rpmbuild")
-    copr = builder.add_parser("copr", help="Build using COPR")
+    copr = builder.add_parser("copr", help="Build using COPR", parents=[chroot_parser])
     copr.add_argument("--owner", help="COPR project owner", required=True)
     copr.add_argument("--project", help="COPR project name")
 
     build_action = parser.add_subparsers(dest="build_action")
     build_action.add_parser("srpm", help="Build SRPM(s)")
-    rpm = build_action.add_parser("rpm", help="Build RPM(s)", parents=[rpm_parser])
-    rpm.add_argument("--chroot", help="Chroot to build for", required=True)
+    build_action.add_parser("rpm", help="Build RPM(s)", parents=[rpm_parser])
     build_action.required = True
 
 def main():
