@@ -19,7 +19,6 @@ from datetime import datetime
 import re
 import subprocess
 import tempfile
-import rpm
 from . import LOGGER
 from .git import PatchesAction
 
@@ -60,6 +59,7 @@ def prepare_spec(spec, version, release, prefix, patches):
     :return: Patches RPM spec
     :rtype: str
     """
+    import rpm
     rpmspec = rpm.spec(spec)
 
     # TODO: currently we don't support multiple sources

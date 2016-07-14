@@ -19,7 +19,6 @@ import os
 import re
 import shutil
 import subprocess
-import rpm
 from . import LOGGER, utils
 from .git import PatchesAction
 
@@ -54,6 +53,7 @@ class Component(object):
         :param str cwd: Working directory (for spec, sources)
         """
         assert self.cloned
+        import rpm
         if self.distgit:
             spec = os.path.join(self.distgit.cwd, "{!s}.spec".format(self.name))
             patches = self.distgit.patches
