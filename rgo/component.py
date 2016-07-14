@@ -135,4 +135,4 @@ class Component(object):
                                  "--define", "_srcrpmdir {!s}".format(cwd)],
                                 check=True, universal_newlines=True,
                                 stdout=subprocess.PIPE)
-        return re.match(r"^Wrote: (.+)$", result.stdout).group(1)
+        return re.match(r"^Wrote: (.+\.(?:no)?src\.rpm)$", result.stdout).group(1)
