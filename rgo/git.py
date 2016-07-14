@@ -121,9 +121,10 @@ class Git(object):
         if pkg:
             ver = remove_prefix(ver, pkg, True)
             ver = remove_prefix(ver, pkg.replace("-", "_"), True)
-            ver = remove_prefix(ver, "-")
-            ver = remove_prefix(ver, "_")
         ver = remove_prefix(ver, "v")
+        ver = remove_prefix(ver, "version")
+        ver = remove_prefix(ver, "-")
+        ver = remove_prefix(ver, "_")
         commit = self.rev_parse(self.ref, short=True)
         if ver.endswith("-g{!s}".format(commit)):
             # -X-gYYYYYY
