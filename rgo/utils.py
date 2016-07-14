@@ -29,9 +29,16 @@ def try_prep(srpm):
     """
     LOGGER.debug("Trying to run %%prep on: %r", srpm)
     with tempfile.TemporaryDirectory(prefix="rgo", suffix="-prep") as tmp:
-        subprocess.run(["rpmbuild", "-rp", srpm, "--nodeps",
-                        "--define", "_topdir {}".format(tmp)],
-                       check=True)
+        try:
+            proc = subprocess.run(["rpmbuild", "-rp", srpm, "--nodeps",
+                                   "--define", "_topdir {}".format(tmp)],
+                                  check=True, universal_newlines=True,
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError as err:
+            LOGGER.critical("Failed to run %%prep on: %r\n%s", srpm, err.output)
+            raise
+        else:
+            LOGGER.debug(proc.stdout)
 
 def generate_changelog(date, version, release):
     """Generate dumb changelog.

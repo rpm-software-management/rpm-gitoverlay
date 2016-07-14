@@ -128,11 +128,19 @@ class Component(object):
             shutil.copy2(os.path.join(self.distgit.cwd, source),
                          os.path.join(cwd, source))
 
-        # Build .src.rpm
-        result = subprocess.run(["rpmbuild", "-bs", _spec_path, "--nodeps",
-                                 "--define", "_topdir {!s}".format(cwd),
-                                 "--define", "_sourcedir {!s}".format(cwd),
-                                 "--define", "_srcrpmdir {!s}".format(cwd)],
-                                check=True, universal_newlines=True,
-                                stdout=subprocess.PIPE)
-        return re.match(r"^Wrote: (.+\.(?:no)?src\.rpm)$", result.stdout).group(1)
+        # Build .(no)src.rpm
+        try:
+            result = subprocess.run(["rpmbuild", "-bs", _spec_path, "--nodeps",
+                                     "--define", "_topdir {!s}".format(cwd),
+                                     "--define", "_sourcedir {!s}".format(cwd),
+                                     "--define", "_srcrpmdir {!s}".format(cwd)],
+                                    check=True, universal_newlines=True,
+                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError as err:
+            LOGGER.critical("Failed to build (no)source RPM:\n%s", err.output)
+            raise
+        else:
+            LOGGER.debug(result.stdout)
+        srpm = re.match(r"^Wrote: (.+\.(?:no)?src\.rpm)$", result.stdout).group(1)
+        LOGGER.info("Built (no)source RPM: %r", srpm)
+        return srpm

@@ -18,6 +18,7 @@
 import re
 import subprocess
 import tempfile
+from .. import LOGGER
 
 class RpmBuilder(object):
     """Build RPM(s) using rpmbuild."""
@@ -29,8 +30,16 @@ class RpmBuilder(object):
         :rtype: list
         """
         tmpdir = tempfile.mkdtemp(prefix="rgo", suffix="-rpmbuild")
-        proc = subprocess.run(["rpmbuild", "--rebuild", srpm,
-                               "--define", "_topdir {!s}".format(tmpdir)],
-                              check=True, universal_newlines=True,
-                              stdout=subprocess.PIPE)
-        return re.findall(r"^Wrote: (.+\.rpm)$", proc.stdout, re.M)
+        try:
+            proc = subprocess.run(["rpmbuild", "--rebuild", srpm,
+                                   "--define", "_topdir {!s}".format(tmpdir)],
+                                  check=True, universal_newlines=True,
+                                  stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+        except subprocess.CalledProcessError as err:
+            LOGGER.critical("Failed to build package(s) from SRPM:\n%s", err.output)
+            raise
+        else:
+            LOGGER.debug(proc.stdout)
+        pkgs = re.findall(r"^Wrote: (.+\.rpm)$", proc.stdout, re.M)
+        LOGGER.info("Built package(s) from %r: %r", srpm, pkgs)
+        return pkgs
