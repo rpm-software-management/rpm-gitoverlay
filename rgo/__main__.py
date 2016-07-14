@@ -60,12 +60,14 @@ def main():
                         help="Directory with git repositories")
     parser.add_argument("-o", "--output", help="Output file for list of (S)RPMs")
     builder_type = parser.add_subparsers(help="What to build", dest="builder_type")
-    pkg_builder = builder_type.add_parser("build-package", help="Build single package from git repo")
+    pkg_builder = builder_type.add_parser("build-package",
+                                          help="Build single package from git repo")
     pkg_builder.add_argument("--freeze", help="Build from specified commit")
     pkg_builder.add_argument("--branch", help="Build from specified branch")
     pkg_builder.add_argument("--latest-tag", help="Build from latest tag", action="store_true")
     pkg_builder.add_argument("-n", "--name", help="Package name", required=True)
-    ovl_builder = builder_type.add_parser("build-overlay", help="Build overlay based on overlay.yml")
+    ovl_builder = builder_type.add_parser("build-overlay",
+                                          help="Build overlay based on overlay.yml")
     ovl_builder.add_argument("-s", "--source", default=os.getcwd(),
                              help="Directory where overlay.yml is located")
     builder_type.required = True
