@@ -43,7 +43,7 @@ BuildArch:      noarch
 %py3_install
 
 %check
-%{__python3} setup.py nosetests
+%{__python3} setup.py test
 
 %files
 %license COPYING
