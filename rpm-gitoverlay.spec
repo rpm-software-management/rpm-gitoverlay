@@ -12,8 +12,6 @@ BuildRequires:  python3-setuptools
 BuildRequires:  python3-nose
 BuildRequires:  python3-marshmallow
 BuildRequires:  python3-marshmallow-enum
-BuildRequires:  rpm-python3
-BuildRequires:  python3-PyYAML
 BuildRequires:  git-core
 Requires:       python3-marshmallow
 Requires:       python3-marshmallow-enum
