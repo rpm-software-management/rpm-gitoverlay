@@ -10,6 +10,14 @@ Without coverage:
 With coverage:
 `$ python3 setup.py nosetests`
 
+## Installation
+
+#### Fedora
+```
+$ sudo dnf copr enable ignatenkobrain/rpm-gitoverlay
+$ sudo dnf install rpm-gitoverlay
+```
+
 ## Usage
 
 1. Create `overlay.yml` file (see reference below)
