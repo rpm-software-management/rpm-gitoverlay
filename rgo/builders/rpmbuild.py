@@ -15,7 +15,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-import re
+import glob
+import os
 import subprocess
 import tempfile
 from .. import LOGGER
@@ -40,6 +41,7 @@ class RpmBuilder(object):
             raise
         else:
             LOGGER.debug(proc.stdout)
-        pkgs = re.findall(r"^Wrote: (.+\.rpm)$", proc.stdout, re.M)
-        LOGGER.info("Built package(s) from %r: %r", srpm, pkgs)
-        return pkgs
+        rpms = glob.glob(os.path.join(tmpdir, "RPMS", "*", "*.rpm"))
+        assert len(rpms) > 0, "We expect at least one .rpm, but we found 0"
+        LOGGER.info("Built package(s) from %r: %r", srpm, rpms)
+        return rpms
