@@ -31,12 +31,15 @@ class TestGit(object):
         gitconfig = configparser.ConfigParser(interpolation=None)
         gitconfig.optionxform = str
         gitconfig["user"] = {"email": "rpm-gitoverlay@example.com", "name": "RPM-gitoverlay"}
+        self._cwd = os.path.join(self._repo, "repo")
         with open(os.path.join(self._repo, ".gitconfig"), "w") as fd:
             gitconfig.write(fd)
+        self._old_environ = dict(os.environ)
         os.environ["HOME"] = self._repo
-        self._cwd = os.path.join(self._repo, "repo")
 
     def teardown(self):
+        os.environ.clear()
+        os.environ.update(self._old_environ)
         shutil.rmtree(self._bare)
         shutil.rmtree(self._repo)
 

@@ -16,6 +16,7 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
+import contextlib
 import logging
 import os
 import shutil
@@ -24,6 +25,21 @@ import tempfile
 import warnings
 import yaml
 from . import LOGGER, schema, utils
+
+@contextlib.contextmanager
+def set_env(**environ):
+    """
+    Temporarily set the process environment variables.
+
+    :param dict environ: Environment variables to set
+    """
+    old_environ = dict(os.environ)
+    os.environ.update(environ)
+    try:
+        yield
+    finally:
+        os.environ.clear()
+        os.environ.update(old_environ)
 
 def setup_logger(loglevel=None):
     if loglevel:
@@ -104,13 +120,13 @@ def main():
                           "rpmbuild builder can't handle it properly")
         with open(os.path.join(args.gitdir, ".gitconfig"), "w") as fd:
             ovl.aliases.gitconfig.write(fd)
-        os.environ["HOME"] = args.gitdir
     else:
         shutil.rmtree(args.gitdir)
         raise NotImplementedError
 
-    for component in ovl.components:
-        component.clone(args.gitdir)
+    with set_env(HOME=args.gitdir):
+        for component in ovl.components:
+            component.clone(args.gitdir)
 
     tmpdir = tempfile.mkdtemp(prefix="rgo", suffix="-build")
     srpms = []
