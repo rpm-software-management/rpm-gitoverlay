@@ -31,7 +31,7 @@ args = dict(
     packages=setuptools.find_packages(),
     entry_points={
         "console_scripts": [
-            "rpm-gitoverlay = rgo.main.__main__:main"
+            "rpm-gitoverlay = rgo.__main__:main"
         ]
     },
     install_requires=["PyYAML"] + REQUIRES,
