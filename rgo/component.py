@@ -22,6 +22,8 @@ import subprocess
 from . import LOGGER, utils
 from .git import PatchesAction
 
+SRPM_RE = re.compile(r".+\.(?:no)?src\.rpm")
+
 class Component(object):
     def __init__(self, name, git=None, distgit=None):
         """
@@ -132,8 +134,7 @@ class Component(object):
         try:
             result = subprocess.run(["rpmbuild", "-bs", _spec_path, "--nodeps",
                                      "--define", "_topdir {!s}".format(cwd),
-                                     "--define", "_sourcedir {!s}".format(cwd),
-                                     "--define", "_srcrpmdir {!s}".format(cwd)],
+                                     "--define", "_sourcedir {!s}".format(cwd)],
                                     check=True, universal_newlines=True,
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as err:
@@ -141,6 +142,9 @@ class Component(object):
             raise
         else:
             LOGGER.debug(result.stdout)
-        srpm = re.match(r"^Wrote: (.+\.(?:no)?src\.rpm)$", result.stdout).group(1)
+        srpms_dir = os.path.join(cwd, "SRPMS")
+        srpms = [f for f in os.listdir(srpms_dir) if SRPM_RE.search(f)]
+        assert len(srpms) == 1, "We expect 1 .(no)src.rpm, but we found: {!r}".format(srpms)
+        srpm = os.path.join(srpms_dir, srpms[0])
         LOGGER.info("Built (no)source RPM: %r", srpm)
         return srpm
