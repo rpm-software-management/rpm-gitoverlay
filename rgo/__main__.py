@@ -115,7 +115,7 @@ def main():
             sys.exit(1)
         with open(yml, "r") as _yml:
             ovl = load_overlay(yaml.safe_load(_yml))
-        if args.builder == "rpmbuild" and len(ovl.components) > 1:
+        if args.build_action == "rpm" and args.builder == "rpmbuild" and len(ovl.components) > 1:
             warnings.warn("If there is dependencies between components, "
                           "rpmbuild builder can't handle it properly")
         with open(os.path.join(args.gitdir, ".gitconfig"), "w") as fd:
