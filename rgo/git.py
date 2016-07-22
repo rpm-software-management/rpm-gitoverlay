@@ -31,11 +31,12 @@ class DistGitType(enum.Enum):
     git = "git"
 
 class Git(object):
-    def __init__(self, src, freeze=None, branch=None, latest_tag=False):
+    def __init__(self, src, freeze=None, branch=None, latest_tag=False, spec_path=None):
         self.src = src
         self.freeze = freeze
         self.branch = branch
         self.latest_tag = latest_tag
+        self.spec_path = spec_path
         self.cwd = None
 
     def __repr__(self): # pragma: no cover

@@ -60,10 +60,12 @@ class Component(object):
             spec = os.path.join(self.distgit.cwd, "{!s}.spec".format(self.name))
             patches = self.distgit.patches
         else:
-            spec = os.path.join(self.git.cwd, "{!s}.spec".format(self.name))
+            spec = os.path.join(self.git.cwd, self.git.spec_path or "{!s}.spec".format(self.name))
             patches = PatchesAction.keep
 
-        _spec_path = os.path.join(cwd, "{!s}.spec".format(self.name))
+        rpmspec = rpm.spec(spec)
+        _spec_path = os.path.join(cwd,
+                                  "{!s}.spec".format(rpmspec.sourceHeader["Name"].decode("utf-8")))
         if self.git:
             # Get version and release
             version, release = self.git.describe(self.name)
@@ -71,7 +73,7 @@ class Component(object):
             # If spec is located in upstream it's possible that version can be changed
             # which means we also should align it here
             if not self.distgit:
-                _version = rpm.spec(spec).sourceHeader["Version"].decode("utf-8")
+                _version = rpmspec.sourceHeader["Version"].decode("utf-8")
                 LOGGER.debug("Version in upstream spec file: %r", _version)
                 if rpm.labelCompare((None, _version, None), (None, version, None)) == 1:
                     # Version in spec > than from git tags

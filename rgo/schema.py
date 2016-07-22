@@ -49,6 +49,7 @@ class GitSchema(Schema):
     freeze = String()
     branch = String()
     latest_tag = Boolean(load_from="latest-tag")
+    spec_path = String(load_from="spec-path")
 
     class Meta:
         strict = True
@@ -70,7 +71,7 @@ class DistGitSchema(GitSchema):
 
     class Meta:
         strict = True
-        exclude = ("latest_tag",)
+        exclude = ("latest_tag", "spec_path")
 
     @post_load
     def make_object(self, data):

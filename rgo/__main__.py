@@ -83,6 +83,7 @@ def main():
     pkg_builder.add_argument("--branch", help="Build from specified branch")
     pkg_builder.add_argument("--latest-tag", help="Build from latest tag", action="store_true")
     pkg_builder.add_argument("-n", "--name", help="Package name", required=True)
+    pkg_builder.add_argument("--spec-path", help="Path to spec file")
     ovl_builder = builder_type.add_parser("build-overlay",
                                           help="Build overlay based on overlay.yml")
     ovl_builder.add_argument("-s", "--source", default=os.getcwd(),
@@ -106,6 +107,8 @@ def main():
             component["git"]["branch"] = args.branch
         if args.latest_tag:
             component["git"]["latest-tag"] = args.latest_tag
+        if args.spec_path:
+            component["git"]["spec-path"] = args.spec_path
         ovl = load_overlay({"components": [component]})
     elif args.builder_type == "build-overlay":
         args.source = os.path.abspath(args.source)

@@ -61,6 +61,7 @@ You must set one or both from `git`/`distgit`.
 | freeze     | no       | str  | Commit to freeze repo on                    |
 | branch     | no       | str  | Branch to freeze repo on                    |
 | latest-tag | no       | bool | Find latest tag from used branch and use it |
+| spec-path  | no       | str  | Path to spec file (relative from top-dir)   |
 
 1. `freeze` or `branch` can be used at the same time
 2. `freeze` or `latest-tag` can be used at the same time
@@ -74,7 +75,7 @@ In case `latest-tag` is `True` and there are no git tags in used branch - except
 | patches   | no       | str  | What to do with patches: `keep` (**default**), `drop`                           |
 | type      | no       | str  | What type of distgit it is?: `auto` (**default**), `dist-git`, `git-lfs`, `git` |
 
-Plus all parameters from `git` structure.
+Plus all parameters from `git` structure except `latest-tag` and `spec-path`.
 
 ## `overlay.yml` example
 
