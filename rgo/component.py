@@ -51,7 +51,9 @@ class Component(object):
         self.cloned = True
 
     def make_srpm(self, cwd):
-        """Build SRPM.
+        """
+        Build SRPM.
+
         :param str cwd: Working directory (for spec, sources)
         """
         assert self.cloned
@@ -82,7 +84,7 @@ class Component(object):
                     # FIXME: Add prefix 0. to indicate that it was not released yet
                     # There are no reliable way to get in which commit version was set
                     # except iterating over commits
-                    release = "0.{}".format(release)
+                    release = "0.{!s}".format(release)
 
             # Prepare archive
             if release == "1":

@@ -167,6 +167,9 @@ class DistGit(Git):
     def __init__(self, src, freeze=None, branch=None,
                  patches=PatchesAction.keep, type_=DistGitType.auto):
         """
+        :param str src: URL to git repo
+        :param str freeze: Commit to freeze repo on
+        :param str branch: Branch to freeze repo on
         :param rgo.git.PatchesAction patches: What to do with patches
         :param rgo.git.DistGitType type_: Type of distgit
         """
