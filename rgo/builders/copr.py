@@ -81,7 +81,8 @@ class CoprBuilder(object):
             # Refresh info
             done = set()
             for task in build.get_build_tasks():
-                _done = task.state not in ("running", "pending", "starting", "importing")
+                _done = task.state not in ("waiting", "forked", "running",
+                                           "pending", "starting", "importing")
                 if _done:
                     if task.state == "failed":
                         success = False
