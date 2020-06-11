@@ -59,11 +59,19 @@ class Component(object):
         assert self.cloned
         import rpm
         if self.distgit:
-            spec = os.path.join(self.distgit.cwd, "{!s}.spec".format(self.name))
+            spec_git = self.distgit
+            spec_name = "{!s}.spec".format(self.name)
             patches = self.distgit.patches
         else:
-            spec = os.path.join(self.git.cwd, self.git.spec_path or "{!s}.spec".format(self.name))
+            spec_git = self.git
+            spec_name = self.git.spec_path or "{!s}.spec".format(self.name)
             patches = PatchesAction.keep
+
+        # extract spec file from specified branch and save it in temporary location
+        spec = os.path.join(cwd, "original.spec")
+        with open(spec, "w") as f_spec:
+            subprocess.run(["git", "cat-file", "-p", "{}:{}".format(spec_git.ref, spec_name)],
+                           cwd=spec_git.cwd, check=True, stdout=f_spec)
 
         rpmspec = rpm.spec(spec)
         _name = rpmspec.sourceHeader["Name"]
