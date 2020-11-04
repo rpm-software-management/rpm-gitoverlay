@@ -27,7 +27,7 @@ class TestAlias(object):
         gitconfig = '[url "git@github.com:"]\ninsteadOf = "github:"'
         result = AliasSchema(many=True).load(data)
         with io.StringIO() as fd:
-            result.data.gitconfig.write(fd)
+            result.gitconfig.write(fd)
             fd.seek(0)
             tools.eq_(fd.read().rstrip(), gitconfig)
 
@@ -40,16 +40,16 @@ class TestAlias(object):
 
     def test_many(self):
         alias = {"name": "foo", "url": "bar"}
-        tools.ok_(isinstance(AliasSchema().load(alias).data, Alias))
-        tools.ok_(isinstance(AliasSchema(many=True).load([alias]).data, Aliases))
+        tools.ok_(isinstance(AliasSchema().load(alias), Alias))
+        tools.ok_(isinstance(AliasSchema(many=True).load([alias]), Aliases))
 
     def test_builtins(self):
         data = [{"name": "foo", "url": "u1"},
                 {"name": "bar", "url": "u2"}]
         results = AliasSchema(many=True).load(data)
-        tools.eq_(len(results.data), 2)
-        tools.ok_("foo" in results.data)
-        tools.ok_("baz" not in results.data)
-        tools.ok_(results.data[0] in results.data)
-        tools.eq_(AliasSchema().dump(results.data["foo"]).data, data[0])
-        tools.eq_(AliasSchema().dump(results.data[1]).data, data[1])
+        tools.eq_(len(results), 2)
+        tools.ok_("foo" in results)
+        tools.ok_("baz" not in results)
+        tools.ok_(results[0] in results)
+        tools.eq_(AliasSchema().dump(results["foo"]), data[0])
+        tools.eq_(AliasSchema().dump(results[1]), data[1])
