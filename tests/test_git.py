@@ -51,18 +51,17 @@ class TestGit(object):
 
     def test_latest_tag(self):
         results = GitSchema().load({"src": self._bare, "latest-tag": True})
-        repo = results.data
-        repo.clone(self._cwd)
+        results.clone(self._cwd)
         self.commit("test")
-        tools.eq_(repo.ref, None)
+        tools.eq_(results.ref, None)
         self.tag("0.1")
-        tools.eq_(repo.ref, "0.1")
+        tools.eq_(results.ref, "0.1")
         self.commit("test")
-        tools.eq_(repo.ref, "0.1")
+        tools.eq_(results.ref, "0.1")
 
     def test_describe(self):
         results = GitSchema().load({"src": self._bare})
-        repo = results.data
+        repo = results
         repo.clone(self._cwd)
 
         # no tags, plain commit

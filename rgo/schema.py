@@ -30,7 +30,7 @@ class AliasSchema(Schema):
         strict = True
 
     @validates_schema(pass_many=True)
-    def validate_aliases(self, data, many):
+    def validate_aliases(self, data, many, **kwargs):
         if not many:
             return
         names = [x["name"] for x in data]
@@ -38,7 +38,7 @@ class AliasSchema(Schema):
             raise ValidationError("Duplicates found", "name")
 
     @post_load(pass_many=True)
-    def make_object(self, data, many):
+    def make_object(self, data, many, **kwargs):
         if many:
             return alias.Aliases(data)
         else:
@@ -48,21 +48,21 @@ class GitSchema(Schema):
     src = String(required=True)
     freeze = String()
     branch = String()
-    latest_tag = Boolean(load_from="latest-tag")
-    spec_path = String(load_from="spec-path")
+    latest_tag = Boolean(data_key="latest-tag")
+    spec_path = String(data_key="spec-path")
 
     class Meta:
         strict = True
 
     @validates_schema
-    def validate_options(self, data):
+    def validate_options(self, data, **kwargs):
         if "freeze" in data and "branch" in data:
             raise ValidationError("Only one of 'freeze'/'branch' must be specified")
         if "freeze" in data and "latest_tag" in data:
             raise ValidationError("Only one of 'freeze'/'latest-tag' must be specified")
 
     @post_load
-    def make_object(self, data):
+    def make_object(self, data, **kwargs):
         return git.Git(**data)
 
 class DistGitSchema(GitSchema):
@@ -74,7 +74,7 @@ class DistGitSchema(GitSchema):
         exclude = ("latest_tag", "spec_path")
 
     @post_load
-    def make_object(self, data):
+    def make_object(self, data, **kwargs):
         if "type" in data:
             data["type_"] = data.pop("type")
         return git.DistGit(**data)
@@ -88,12 +88,12 @@ class ComponentSchema(Schema):
         strict = True
 
     @validates_schema
-    def validate_parameters(self, data):
+    def validate_parameters(self, data, **kwargs):
         if "git" not in data and "distgit" not in data:
             raise ValidationError("At least one of 'git' or 'distgit' must be specified")
 
     @post_load
-    def make_object(self, data):
+    def make_object(self, data, **kwargs):
         return component.Component(**data)
 
 class OverlaySchema(Schema):
@@ -104,5 +104,5 @@ class OverlaySchema(Schema):
         strict = True
 
     @post_load
-    def make_object(self, data):
+    def make_object(self, data, **kwargs):
         return overlay.Overlay(**data)

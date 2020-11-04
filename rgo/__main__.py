@@ -50,7 +50,7 @@ def setup_logger(loglevel=None):
     LOGGER.addHandler(handler)
 
 def load_overlay(json):
-    return schema.OverlaySchema().load(json).data
+    return schema.OverlaySchema().load(json)
 
 def add_build_actions(parser):
     chroot_parser = argparse.ArgumentParser(add_help=False)
