@@ -18,7 +18,7 @@
 import time
 from urllib.parse import urljoin
 import bs4
-import copr
+import copr.v3 as copr
 import requests
 from .. import LOGGER
 
@@ -30,44 +30,44 @@ class CoprBuilder(object):
         :param str chroot: Project chroot
         :param bool enable_net: Enable internet during build (better to disable)
         """
-        # FIXME: python-copr doesn't support group projects
-        # https://bugzilla.redhat.com/show_bug.cgi?id=1337247
+        # FIXME: implement support for groups
         if owner.startswith("@"):
-            raise NotImplementedError("Group projects are not supported in python-copr")
+            raise NotImplementedError("Group projects are not implemented")
+        self.owner = owner
 
-        self.client = copr.create_client2_from_file_config()
-        if chroot is not None and chroot not in (c.name for c in self.client.mock_chroots.get_list(active_only=True)):
-            raise Exception("{!r} doesn't seem to be active chroot".format(chroot))
-        self.enable_net = enable_net
         if not name:
             name = "rpm-gitoverlay-{:f}".format(time.time())
-        projects = self.client.projects.get_list(owner=owner, name=name, limit=1)
-        if not projects:
-            if chroot is None:
+        self.name = name
+
+        self.client = copr.Client.create_from_config_file()
+
+        if chroot is not None and \
+                chroot not in self.client.mock_chroot_proxy.get_list():
+            raise Exception("{!r} doesn't seem to be active chroot".format(chroot))
+        self.chroot = chroot
+
+        self.enable_net = enable_net
+
+        try:
+            self.project = self.client.project_proxy.get(owner, name)
+            LOGGER.info("Using existing COPR project: %s/%s", self.project.ownername, self.project.name)
+
+            if self.chroot is not None and self.chroot not in self.project.chroot_repos:
+                raise Exception("{!r} chroot is not enabled for COPR project: ".format(self.chroot))
+        except copr.exceptions.CoprNoResultException:
+            if self.chroot is None:
                 raise Exception("Project {!r} doesn't exist, --chroot needs to be specified".format(name))
 
-            self.project = self.client.projects.create(owner=owner, name=name,
-                                                       chroots=[chroot],
-                                                       build_enable_net=self.enable_net)
-            LOGGER.info("Created COPR project: %s/%s",
-                        self.project.owner, self.project.name)
-        else:
-            self.project = projects[0]
-            LOGGER.info("Using existing COPR project: %s/%s",
-                        self.project.owner, self.project.name)
-            if chroot is not None and chroot not in (c.name for c in self.project.get_project_chroot_list()):
-                raise Exception("{!r} chroot is not enabled for COPR project".format(chroot))
-        self.chroot = chroot
+            self.project = self.client.project_proxy.add(owner, name, [self.chroot], enable_net=self.enable_net)
+            LOGGER.info("Created COPR project: %s/%s", self.project.ownername, self.project.name)
+
         LOGGER.info("COPR Project URL: %r", self.project_url)
 
     @property
     def project_url(self):
-        # FIXME: uncomment once upstream will implement it
-        #if project.group:
-        #    url = "/coprs/g/{p.group}/{p.name}"
-        #else:
-        url = "/coprs/{p.owner}/{p.name}"
-        return urljoin(self.client.root_url, url.format(p=self.project))
+        url = "/coprs/{p.ownername}/{p.name}"
+
+        return urljoin(self.client.config["copr_url"], url.format(p=self.project))
 
     def build(self, srpm):
         """Build RPM(s) from SRPM.
@@ -75,40 +75,36 @@ class CoprBuilder(object):
         :return: URL(s) to RPM(s)
         :rtype: list
         """
-        chroots = [self.chroot] if self.chroot is not None else self.project.get_project_chroot_list()
-        build = self.project.create_build_from_file(file_path=srpm, chroots=chroots, enable_net=self.enable_net)
+        chroots = [self.chroot] if self.chroot is not None else list(self.project.chroot_repos.keys())
+        build = self.client.build_proxy.create_from_file(self.owner, self.name, srpm, buildopts={"chroots": chroots})
 
         success = True
         # Wait for build to complete
         while True:
-            # Refresh info
-            done = set()
-            for task in build.get_build_tasks():
-                _done = task.state not in ("waiting", "forked", "running",
-                                           "pending", "starting", "importing")
-                if _done:
-                    if task.state == "failed":
-                        success = False
-                        LOGGER.warning("Build #%d: failed", build.id)
-                    elif task.state == "succeeded":
-                        LOGGER.info("Build #%d: succeeded", build.id)
-                    else:
-                        success = False
-                        raise Exception("Build #{:d}: {!s}".format(build.id, task.state))
+            build = self.client.build_proxy.get(build.id)
+
+            done = build.state not in ("waiting", "forked", "running", "pending", "starting", "importing")
+            if done:
+                if build.state == "failed":
+                    success = False
+                    LOGGER.warning("Build #%d: failed", build.id)
+                elif build.state == "succeeded":
+                    LOGGER.info("Build #%d: succeeded", build.id)
                 else:
-                    LOGGER.debug("Build #%d: %s", build.id, task.state)
+                    success = False
+                    raise Exception("Build #{:d}: {!s}".format(build.id, task.state))
+            else:
+                LOGGER.debug("Build #%d: %s", build.id, build.state)
 
-                done.add(_done)
-
-            if all(done):
+            if done:
                 break
 
             time.sleep(5)
 
         # Parse results
         rpms = []
-        for task in build.get_build_tasks():
-            url_prefix = task.result_dir_url
+        for build_chroot in self.client.build_chroot_proxy.get_list(build.id):
+            url_prefix = build_chroot.result_url
             resp = requests.get(url_prefix)
             if resp.status_code != 200:
                 raise Exception("Failed to fetch {!r}: {!s}".format(url_prefix, resp.text))
