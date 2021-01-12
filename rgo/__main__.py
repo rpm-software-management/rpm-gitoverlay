@@ -54,7 +54,7 @@ def load_overlay(json):
 
 def add_build_actions(parser):
     chroot_parser = argparse.ArgumentParser(add_help=False)
-    chroot_parser.add_argument("--chroot", help="Chroot to build for", required=True)
+    chroot_parser.add_argument("--chroot", help="Chroot to build for")
 
     rpm_parser = argparse.ArgumentParser(add_help=False)
     builder = rpm_parser.add_subparsers(help="Builder", dest="builder")
@@ -151,7 +151,7 @@ def main():
         # Build RPMs
         if args.builder == "copr":
             from rgo.builders.copr import CoprBuilder
-            builder = CoprBuilder(args.owner, args.project, args.chroot or ovl.chroot)
+            builder = CoprBuilder(args.owner, args.project, args.chroot)
         elif args.builder == "rpmbuild":
             from rgo.builders.rpmbuild import RpmBuilder
             builder = RpmBuilder()

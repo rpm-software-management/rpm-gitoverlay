@@ -23,7 +23,7 @@ import requests
 from .. import LOGGER
 
 class CoprBuilder(object):
-    def __init__(self, owner, name=None, chroot="fedora-rawhide-x86_64", enable_net=False):
+    def __init__(self, owner, name=None, chroot=None, enable_net=False):
         """Build RPMs in COPR.
         :param str owner: Project owner
         :param str name: Project name
@@ -36,13 +36,16 @@ class CoprBuilder(object):
             raise NotImplementedError("Group projects are not supported in python-copr")
 
         self.client = copr.create_client2_from_file_config()
-        if chroot not in (c.name for c in self.client.mock_chroots.get_list(active_only=True)):
+        if chroot is not None and chroot not in (c.name for c in self.client.mock_chroots.get_list(active_only=True)):
             raise Exception("{!r} doesn't seem to be active chroot".format(chroot))
         self.enable_net = enable_net
         if not name:
             name = "rpm-gitoverlay-{:f}".format(time.time())
         projects = self.client.projects.get_list(owner=owner, name=name, limit=1)
         if not projects:
+            if chroot is None:
+                raise Exception("Project {!r} doesn't exist, --chroot needs to be specified".format(name))
+
             self.project = self.client.projects.create(owner=owner, name=name,
                                                        chroots=[chroot],
                                                        build_enable_net=self.enable_net)
@@ -52,7 +55,7 @@ class CoprBuilder(object):
             self.project = projects[0]
             LOGGER.info("Using existing COPR project: %s/%s",
                         self.project.owner, self.project.name)
-            if chroot not in (c.name for c in self.project.get_project_chroot_list()):
+            if chroot is not None and chroot not in (c.name for c in self.project.get_project_chroot_list()):
                 raise Exception("{!r} chroot is not enabled for COPR project".format(chroot))
         self.chroot = chroot
         LOGGER.info("COPR Project URL: %r", self.project_url)
@@ -72,8 +75,8 @@ class CoprBuilder(object):
         :return: URL(s) to RPM(s)
         :rtype: list
         """
-        build = self.project.create_build_from_file(file_path=srpm, chroots=[self.chroot],
-                                                    enable_net=self.enable_net)
+        chroots = [self.chroot] if self.chroot is not None else self.project.get_project_chroot_list()
+        build = self.project.create_build_from_file(file_path=srpm, chroots=chroots, enable_net=self.enable_net)
 
         success = True
         # Wait for build to complete
