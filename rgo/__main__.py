@@ -63,6 +63,11 @@ def add_build_actions(parser):
     copr = builder.add_parser("copr", help="Build using COPR", parents=[chroot_parser])
     copr.add_argument("--owner", help="COPR project owner", required=True)
     copr.add_argument("--project", help="COPR project name")
+    copr.add_argument(
+        "--no-wait",
+        help="Don't wait for the builds to finish (doesn't output built RPMs",
+        action="store_true"
+    )
 
     build_action = parser.add_subparsers(dest="build_action")
     build_action.add_parser("srpm", help="Build SRPM(s)")
@@ -151,7 +156,7 @@ def main():
         # Build RPMs
         if args.builder == "copr":
             from rgo.builders.copr import CoprBuilder
-            builder = CoprBuilder(args.owner, args.project, args.chroot)
+            builder = CoprBuilder(args.owner, args.project, args.chroot, no_wait=args.no_wait)
         elif args.builder == "rpmbuild":
             from rgo.builders.rpmbuild import RpmBuilder
             builder = RpmBuilder()
