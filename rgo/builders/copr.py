@@ -23,7 +23,7 @@ import requests
 from .. import LOGGER
 
 class CoprBuilder(object):
-    def __init__(self, owner, name=None, chroot=None, enable_net=False):
+    def __init__(self, owner, name=None, chroot=None, no_wait=False, enable_net=False):
         """Build RPMs in COPR.
         :param str owner: Project owner
         :param str name: Project name
@@ -46,6 +46,7 @@ class CoprBuilder(object):
             raise Exception("{!r} doesn't seem to be active chroot".format(chroot))
         self.chroot = chroot
 
+        self.no_wait = no_wait
         self.enable_net = enable_net
 
         try:
@@ -77,6 +78,9 @@ class CoprBuilder(object):
         """
         chroots = [self.chroot] if self.chroot is not None else list(self.project.chroot_repos.keys())
         build = self.client.build_proxy.create_from_file(self.owner, self.name, srpm, buildopts={"chroots": chroots})
+
+        if self.no_wait:
+            return []
 
         success = True
         # Wait for build to complete
