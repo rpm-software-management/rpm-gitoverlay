@@ -18,7 +18,7 @@
 # pylint: disable=too-few-public-methods,no-self-use
 
 from marshmallow import Schema, post_load, validates_schema, ValidationError
-from marshmallow.fields import String, Boolean, Nested
+from marshmallow.fields import String, Boolean, Nested, List
 from marshmallow_enum import EnumField as Enum
 from . import alias, git, component, overlay
 
@@ -83,6 +83,7 @@ class ComponentSchema(Schema):
     name = String(required=True)
     git = Nested(GitSchema)
     distgit = Nested(DistGitSchema)
+    requires = List(String())
 
     class Meta:
         strict = True

@@ -25,7 +25,7 @@ from .git import PatchesAction
 SRPM_RE = re.compile(r".+\.(?:no)?src\.rpm")
 
 class Component(object):
-    def __init__(self, name, git=None, distgit=None):
+    def __init__(self, name, git=None, distgit=None, requires=[]):
         """
         :param str name: Name of component
         :param rgo.git.Git: Git repository
@@ -35,7 +35,14 @@ class Component(object):
         self.name = name
         self.git = git
         self.distgit = distgit
+        self.requires = set(requires)
         self.cloned = False
+
+        self.build_id = None
+        self.done = None
+        self.srpm = None
+        self.state = None
+        self.success = None
 
     def __repr__(self): # pragma: no cover
         return "<Component {0.name!r}: git({0.git!r}) distgit({0.distgit})>".format(self)
@@ -50,12 +57,15 @@ class Component(object):
             self.distgit.clone(os.path.join(dest, "{!s}-distgit".format(self.name)))
         self.cloned = True
 
-    def make_srpm(self, cwd):
+    def make_srpm(self, tmpdir):
         """
         Build SRPM.
 
-        :param str cwd: Working directory (for spec, sources)
+        :param str tmpdir: Temporary directory to work in
         """
+        workdir = os.path.join(tmpdir, self.name)
+        os.mkdir(workdir)
+
         assert self.cloned
         import rpm
         if self.distgit:
@@ -68,7 +78,7 @@ class Component(object):
             patches = PatchesAction.keep
 
         # extract spec file from specified branch and save it in temporary location
-        spec = os.path.join(cwd, "original.spec")
+        spec = os.path.join(workdir, "original.spec")
         with open(spec, "w") as f_spec:
             subprocess.run(["git", "cat-file", "-p", "{}:{}".format(spec_git.ref, spec_name)],
                            cwd=spec_git.cwd, check=True, stdout=f_spec)
@@ -77,7 +87,7 @@ class Component(object):
         _name = rpmspec.sourceHeader["Name"]
         if isinstance(_name, bytes):
             _name = _name.decode("utf-8")
-        _spec_path = os.path.join(cwd, "{!s}.spec".format(_name))
+        _spec_path = os.path.join(workdir, "{!s}.spec".format(_name))
         if self.git:
             # Get version and release
             version, release = self.git.describe(self.name)
@@ -104,7 +114,7 @@ class Component(object):
                 nvr = "{!s}-{!s}".format(self.name, version)
             else:
                 nvr = "{!s}-{!s}-{!s}".format(self.name, version, release)
-            archive = os.path.join(cwd, "{!s}.tar.xz".format(nvr))
+            archive = os.path.join(workdir, "{!s}.tar.xz".format(nvr))
             LOGGER.debug("Preparing archive %r", archive)
             proc = subprocess.run(["git", "archive", "--prefix={!s}/".format(nvr),
                                    "--format=tar", self.git.ref],
@@ -144,13 +154,13 @@ class Component(object):
         # Copy sources/patches from distgit
         for source in _sources:
             shutil.copy2(os.path.join(self.distgit.cwd, source),
-                         os.path.join(cwd, source))
+                         os.path.join(workdir, source))
 
         # Build .(no)src.rpm
         try:
             result = subprocess.run(["rpmbuild", "-bs", _spec_path, "--nodeps",
-                                     "--define", "_topdir {!s}".format(cwd),
-                                     "--define", "_sourcedir {!s}".format(cwd)],
+                                     "--define", "_topdir {!s}".format(workdir),
+                                     "--define", "_sourcedir {!s}".format(workdir)],
                                     check=True, universal_newlines=True,
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as err:
@@ -158,9 +168,13 @@ class Component(object):
             raise
         else:
             LOGGER.debug(result.stdout)
-        srpms_dir = os.path.join(cwd, "SRPMS")
+        srpms_dir = os.path.join(workdir, "SRPMS")
         srpms = [f for f in os.listdir(srpms_dir) if SRPM_RE.search(f)]
         assert len(srpms) == 1, "We expect 1 .(no)src.rpm, but we found: {!r}".format(srpms)
-        srpm = os.path.join(srpms_dir, srpms[0])
-        LOGGER.info("Built (no)source RPM: %r", srpm)
-        return srpm
+
+        self.srpm = os.path.join(tmpdir, srpms[0])
+        shutil.move(os.path.join(srpms_dir, srpms[0]), self.srpm)
+        shutil.rmtree(workdir)
+
+        LOGGER.info("Built (no)source RPM: %r", self.srpm)
+        return self.srpm

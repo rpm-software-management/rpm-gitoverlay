@@ -23,7 +23,7 @@ import requests
 from .. import LOGGER
 
 class CoprBuilder(object):
-    def __init__(self, owner, name=None, chroot=None, no_wait=False, enable_net=False):
+    def __init__(self, owner, name=None, chroot=None, enable_net=False):
         """Build RPMs in COPR.
         :param str owner: Project owner
         :param str name: Project name
@@ -46,7 +46,6 @@ class CoprBuilder(object):
             raise Exception("{!r} doesn't seem to be active chroot".format(chroot))
         self.chroot = chroot
 
-        self.no_wait = no_wait
         self.enable_net = enable_net
 
         try:
@@ -70,56 +69,147 @@ class CoprBuilder(object):
 
         return urljoin(self.client.config["copr_url"], url.format(p=self.project))
 
-    def build(self, srpm):
+    def _build_url(self, build_id):
+        return self.project_url + "/build/%s" % build_id
+
+    def build_components(self, components):
+        # A list of lists; the first list contains components that have no requires,
+        # the second list contains components that require those from the first list and so on
+        self.build_batches = [[]]
+        todo_comps = []
+
+        # prepare the build batches
+        for c in components:
+            self.build_batches[0].append(c) if not c.requires else todo_comps.append(c)
+
+        i = 1
+        built_reqs = set()
+        while todo_comps:
+            built_reqs.update([c.name for c in self.build_batches[i-1]])
+            self.build_batches.append([])
+            new_todo = []
+
+            for c in todo_comps:
+                self.build_batches[i].append(c) if c.requires.issubset(built_reqs) else new_todo.append(c)
+
+            if not self.build_batches[i]:
+                raise Exception("Requires of the following components cannot be satisfied: {}".format(
+                    [c.name for c in todo_comps]
+                ))
+
+            todo_comps = new_todo
+            i += 1
+
+        if len(self.build_batches) > 1:
+            LOGGER.info("Doing batched builds")
+            for i in range(0, len(self.build_batches)):
+                batch = self.build_batches[i]
+
+                LOGGER.info("Batch %d:", i + 1)
+                for c in batch:
+                    LOGGER.info("  - %s", c.name)
+
+        after_build_id = None
+        for batch in self.build_batches:
+            with_build_id = None
+            for component in batch:
+                with_build_id = self.build(
+                    component,
+                    with_build_id=with_build_id,
+                    after_build_id=after_build_id if with_build_id is None else None
+                )
+                component.build_id = with_build_id
+            after_build_id = with_build_id
+
+
+    def build(self, component, with_build_id=None, after_build_id=None):
         """Build RPM(s) from SRPM.
-        :param str srpm: Path to .src.rpm to build
-        :return: URL(s) to RPM(s)
-        :rtype: list
+        :param component: The component to build
+        :param with_build_id: ID of the build to build "with" in Copr build batches
+        :param after_build_id: ID of the build to build "after" in Copr build batches
+        :return: the Copr build id
         """
         chroots = [self.chroot] if self.chroot is not None else list(self.project.chroot_repos.keys())
-        build = self.client.build_proxy.create_from_file(self.owner, self.name, srpm, buildopts={"chroots": chroots})
+        buildopts = {
+            "chroots": chroots,
+            "with_build_id": with_build_id,
+            "after_build_id": after_build_id,
+        }
 
-        if self.no_wait:
-            return []
+        build = self.client.build_proxy.create_from_file(self.owner, self.name, component.srpm, buildopts=buildopts)
+        LOGGER.info('Submitted Copr build for %s chroots: %r %s%sURL: %s' % (
+            component.name,
+            chroots,
+            "with: %s " % with_build_id if with_build_id is not None else "",
+            "after: %s " % after_build_id if after_build_id is not None else "",
+            self._build_url(build.id)
+        ))
 
-        success = True
-        # Wait for build to complete
-        while True:
-            build = self.client.build_proxy.get(build.id)
+        return build.id
 
-            done = build.state not in ("waiting", "forked", "running", "pending", "starting", "importing")
-            if done:
-                if build.state == "failed":
-                    success = False
-                    LOGGER.warning("Build #%d: failed", build.id)
-                elif build.state == "succeeded":
-                    LOGGER.info("Build #%d: succeeded", build.id)
+    def wait_for_results(self):
+        failed = False
+
+        for i in range(0, len(self.build_batches)):
+            batch = self.build_batches[i]
+
+            while True:
+                if len(self.build_batches) > 1:
+                    LOGGER.info("Batch %d:", i + 1)
                 else:
-                    success = False
-                    raise Exception("Build #{:d}: {!s}".format(build.id, task.state))
-            else:
-                LOGGER.debug("Build #%d: %s", build.id, build.state)
+                    LOGGER.info("Build status:")
 
-            if done:
-                break
+                done = True
+                for component in batch:
+                    if component.done:
+                        continue
 
-            time.sleep(5)
+                    build = self.client.build_proxy.get(component.build_id)
 
-        # Parse results
+                    component.state = build.state
+                    component.done = build.state not in ("waiting", "forked", "running", "pending", "starting", "importing")
+                    component.success = build.state == "succeeded"
+
+                    if component.done:
+                        if component.success:
+                            LOGGER.info("  build #%d - %s: succeeded", component.build_id, component.name)
+                        else:
+                            # failed/cancelled
+                            LOGGER.info("  build #%d - %s: %s", component.build_id, component.name, component.state)
+                            failed = True
+                    else:
+                        done = False
+                        LOGGER.info("  build #%d - %s: %s", component.build_id, component.name, component.state)
+
+                if done:
+                    break
+
+                time.sleep(10)
+
+        if failed:
+            LOGGER.info("Failed builds:")
+            for batch in self.build_batches:
+                for component in batch:
+                    if not component.success:
+                        LOGGER.info("  build #%d - %s (%s): %s",
+                            component.build_id, component.name, component.state, self._build_url(component.build_id)
+                        )
+
+            raise Exception("Some builds have failed")
+
         rpms = []
-        for build_chroot in self.client.build_chroot_proxy.get_list(build.id):
-            url_prefix = build_chroot.result_url
-            resp = requests.get(url_prefix)
-            if resp.status_code != 200:
-                raise Exception("Failed to fetch {!r}: {!s}".format(url_prefix, resp.text))
-            soup = bs4.BeautifulSoup(resp.text, "lxml")
-            for link in soup.find_all("a", href=True):
-                href = link["href"]
-                if href.endswith(".rpm") and not href.endswith(".src.rpm"):
-                    rpms.append("{}/{}".format(url_prefix, href))
-
-        if not success:
-            # TODO: improve message
-            raise Exception("Build failed")
+        for batch in self.build_batches:
+            for component in batch:
+                # Parse results
+                for build_chroot in self.client.build_chroot_proxy.get_list(component.build_id):
+                    url_prefix = build_chroot.result_url
+                    resp = requests.get(url_prefix)
+                    if resp.status_code != 200:
+                        raise Exception("Failed to fetch {!r}: {!s}".format(url_prefix, resp.text))
+                    soup = bs4.BeautifulSoup(resp.text, "lxml")
+                    for link in soup.find_all("a", href=True):
+                        href = link["href"]
+                        if href.endswith(".rpm") and not href.endswith(".src.rpm"):
+                            rpms.append("{}/{}".format(url_prefix, href))
 
         return rpms

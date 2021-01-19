@@ -137,37 +137,34 @@ def main():
             component.clone(args.gitdir)
 
     tmpdir = tempfile.mkdtemp(prefix="rgo", suffix="-build")
-    srpms = []
     for component in ovl.components:
         # Build SRPMs
-        tmp_c = os.path.join(tmpdir, component.name)
-        os.mkdir(tmp_c)
-        _srpm = component.make_srpm(tmp_c)
-        srpm = os.path.join(tmpdir, os.path.basename(_srpm))
-        shutil.move(_srpm, srpm)
-        srpms.append(srpm)
-        shutil.rmtree(tmp_c)
-        utils.try_prep(srpm)
+        component.make_srpm(tmpdir)
+        utils.try_prep(component.srpm)
 
     if args.build_action == "srpm":
-        out = srpms
+        out = [c.srpm for c in ovl.components]
     elif args.build_action == "rpm":
         out = []
         # Build RPMs
         if args.builder == "copr":
             from rgo.builders.copr import CoprBuilder
-            builder = CoprBuilder(args.owner, args.project, args.chroot, no_wait=args.no_wait)
+            builder = CoprBuilder(args.owner, args.project, args.chroot)
+            builder.build_components(ovl.components)
+
+            if not args.no_wait:
+                out = builder.wait_for_results()
         elif args.builder == "rpmbuild":
             from rgo.builders.rpmbuild import RpmBuilder
             builder = RpmBuilder()
+            for component in ovl.components:
+                out.extend(builder.build(component.srpm))
+                # We don't care about SRPM anymore
+                os.remove(component.srpm)
         else:
             shutil.rmtree(tmpdir)
             raise NotImplementedError
-        for srpm in srpms:
-            # TODO: add support for multiple builds at the same time
-            out.extend(builder.build(srpm))
-            # We don't care about SRPM anymore
-            os.remove(srpm)
+
         # Everything built successfully, we can remove temp directory
         shutil.rmtree(tmpdir)
     else:
