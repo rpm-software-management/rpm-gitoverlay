@@ -76,7 +76,7 @@ def add_build_actions(parser):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--log", help="Log level",
+    parser.add_argument("--log", help="Log level", default="INFO",
                         choices=("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"))
     parser.add_argument("--gitdir", default=os.path.join(os.getcwd(), ".rpm-gitoverlay"),
                         help="Directory with git repositories")
