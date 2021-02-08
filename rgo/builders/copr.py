@@ -129,17 +129,18 @@ class CoprBuilder(object):
         :param after_build_id: ID of the build to build "after" in Copr build batches
         :return: the Copr build id
         """
-        chroots = [self.chroot] if self.chroot is not None else list(self.project.chroot_repos.keys())
         buildopts = {
-            "chroots": chroots,
             "with_build_id": with_build_id,
             "after_build_id": after_build_id,
         }
 
+        if self.chroot is not None:
+            buildopts["chroots"] = [self.chroot]
+
         build = self.client.build_proxy.create_from_file(self.owner, self.name, component.srpm, buildopts=buildopts)
-        LOGGER.info('Submitted Copr build for %s chroots: %r %s%sURL: %s' % (
+        LOGGER.info('Submitted Copr build for %s chroot: %s %s%sURL: %s' % (
             component.name,
-            chroots,
+            buildopts["chroots"][0] if "chroots" in buildopts else "(all)",
             "with: %s " % with_build_id if with_build_id is not None else "",
             "after: %s " % after_build_id if after_build_id is not None else "",
             self._build_url(build.id)
