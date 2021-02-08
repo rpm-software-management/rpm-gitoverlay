@@ -23,7 +23,7 @@ import requests
 from .. import LOGGER
 
 class CoprBuilder(object):
-    def __init__(self, owner, name=None, chroot=None, enable_net=False):
+    def __init__(self, owner, name=None, chroot=None, enable_net=False, delete_after_days=None):
         """Build RPMs in COPR.
         :param str owner: Project owner
         :param str name: Project name
@@ -52,13 +52,21 @@ class CoprBuilder(object):
             self.project = self.client.project_proxy.get(owner, name)
             LOGGER.info("Using existing COPR project: %s/%s", self.project.ownername, self.project.name)
 
+            self.client.project_proxy.edit(owner, name, delete_after_days=delete_after_days)
+
             if self.chroot is not None and self.chroot not in self.project.chroot_repos:
                 raise Exception("{!r} chroot is not enabled for COPR project: ".format(self.chroot))
         except copr.exceptions.CoprNoResultException:
             if self.chroot is None:
                 raise Exception("Project {!r} doesn't exist, --chroot needs to be specified".format(name))
 
-            self.project = self.client.project_proxy.add(owner, name, [self.chroot], enable_net=self.enable_net)
+            self.project = self.client.project_proxy.add(
+                owner,
+                name,
+                [self.chroot],
+                enable_net=self.enable_net,
+                delete_after_days=delete_after_days
+            )
             LOGGER.info("Created COPR project: %s/%s", self.project.ownername, self.project.name)
 
         LOGGER.info("COPR Project URL: %r", self.project_url)
