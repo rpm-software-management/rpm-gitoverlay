@@ -64,6 +64,11 @@ def add_build_actions(parser):
     copr.add_argument("--owner", help="COPR project owner", required=True)
     copr.add_argument("--project", help="COPR project name")
     copr.add_argument(
+        "--delete-project-after-days",
+        help="Delete COPR project after the given number of days",
+        type=int
+    )
+    copr.add_argument(
         "--no-wait",
         help="Don't wait for the builds to finish (doesn't output built RPMs",
         action="store_true"
@@ -149,7 +154,12 @@ def main():
         # Build RPMs
         if args.builder == "copr":
             from rgo.builders.copr import CoprBuilder
-            builder = CoprBuilder(args.owner, args.project, args.chroot)
+            builder = CoprBuilder(
+                args.owner,
+                args.project,
+                args.chroot,
+                delete_after_days=args.delete_project_after_days
+            )
             builder.build_components(ovl.components)
 
             if not args.no_wait:
