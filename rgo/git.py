@@ -19,6 +19,7 @@ import enum
 import os
 import shutil
 import subprocess
+from . import LOGGER
 
 class PatchesAction(enum.Enum):
     keep = "keep"
@@ -48,7 +49,8 @@ class Git(object):
         """
         assert os.path.isabs(dest)
         if os.path.isdir(dest):
-            subprocess.run(["git", "fetch"], check=True, cwd=dest)
+            LOGGER.info("Using existing git repository: %s", dest)
+            subprocess.run(["git", "log", "-1", "--oneline"], check=True, cwd=dest)
         else:
             subprocess.run(["git", "clone", self.src, dest], check=True)
         self.cwd = dest
