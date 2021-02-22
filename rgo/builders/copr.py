@@ -23,11 +23,11 @@ import requests
 from .. import LOGGER
 
 class CoprBuilder(object):
-    def __init__(self, owner, name=None, chroot=None, enable_net=False, delete_after_days=None):
+    def __init__(self, owner, name=None, chroots=[], enable_net=False, delete_after_days=None):
         """Build RPMs in COPR.
         :param str owner: Project owner
         :param str name: Project name
-        :param str chroot: Project chroot
+        :param str chroots: A list of chroots to build for
         :param bool enable_net: Enable internet during build (better to disable)
         """
         # FIXME: implement support for groups
@@ -41,10 +41,10 @@ class CoprBuilder(object):
 
         self.client = copr.Client.create_from_config_file()
 
-        if chroot is not None and \
-                chroot not in self.client.mock_chroot_proxy.get_list():
-            raise Exception("{!r} doesn't seem to be active chroot".format(chroot))
-        self.chroot = chroot
+        for chroot in chroots:
+            if chroot not in self.client.mock_chroot_proxy.get_list():
+                raise Exception("{!r} is not an active chroot".format(chroot))
+        self.chroots = chroots
 
         self.enable_net = enable_net
 
@@ -54,16 +54,17 @@ class CoprBuilder(object):
 
             self.client.project_proxy.edit(owner, name, delete_after_days=delete_after_days)
 
-            if self.chroot is not None and self.chroot not in self.project.chroot_repos:
-                raise Exception("{!r} chroot is not enabled for COPR project: ".format(self.chroot))
+            for chroot in chroots:
+                if chroot not in self.project.chroot_repos:
+                    raise Exception("{!r} chroot is not enabled for COPR project: ".format(chroot))
         except copr.exceptions.CoprNoResultException:
-            if self.chroot is None:
-                raise Exception("Project {!r} doesn't exist, --chroot needs to be specified".format(name))
+            if not self.chroots:
+                raise Exception("Project {!r} doesn't exist, --chroots needs to be specified".format(name))
 
             self.project = self.client.project_proxy.add(
                 owner,
                 name,
-                [self.chroot],
+                self.chroots,
                 enable_net=self.enable_net,
                 delete_after_days=delete_after_days
             )
@@ -142,13 +143,13 @@ class CoprBuilder(object):
             "after_build_id": after_build_id,
         }
 
-        if self.chroot is not None:
-            buildopts["chroots"] = [self.chroot]
+        if self.chroots:
+            buildopts["chroots"] = self.chroots
 
         build = self.client.build_proxy.create_from_file(self.owner, self.name, component.srpm, buildopts=buildopts)
-        LOGGER.info('Submitted Copr build for %s chroot: %s %s%sURL: %s' % (
+        LOGGER.info('Submitted Copr build for %s chroots: %s %s%sURL: %s' % (
             component.name,
-            buildopts["chroots"][0] if "chroots" in buildopts else "(all)",
+            ", ".join(buildopts["chroots"]) if "chroots" in buildopts else "(all)",
             "with: %s " % with_build_id if with_build_id is not None else "",
             "after: %s " % after_build_id if after_build_id is not None else "",
             self._build_url(build.id)
