@@ -52,11 +52,14 @@ class CoprBuilder(object):
             self.project = self.client.project_proxy.get(owner, name)
             LOGGER.info("Using existing COPR project: %s/%s", self.project.ownername, self.project.name)
 
-            self.client.project_proxy.edit(owner, name, delete_after_days=delete_after_days)
+            # add the build chroots to the project's chroots and extend its expiration time
+            self.client.project_proxy.edit(
+                owner,
+                name,
+                chroots=list(set(list(self.project.chroot_repos.keys()) + chroots)),
+                delete_after_days=delete_after_days
+            )
 
-            for chroot in chroots:
-                if chroot not in self.project.chroot_repos:
-                    raise Exception("{!r} chroot is not enabled for COPR project: ".format(chroot))
         except copr.exceptions.CoprNoResultException:
             if not self.chroots:
                 raise Exception("Project {!r} doesn't exist, --chroots needs to be specified".format(name))
