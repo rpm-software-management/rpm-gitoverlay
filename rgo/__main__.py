@@ -52,9 +52,22 @@ def setup_logger(loglevel=None):
 def load_overlay(json):
     return schema.OverlaySchema().load(json)
 
+class CommaSplit(argparse._AppendAction):
+    def __call__(self, parser, namespace, values, opt_str):
+        for val in values.split(","):
+            stripped = val.strip()
+            if stripped:
+                super(CommaSplit, self).__call__(parser, namespace, stripped, opt_str)
+
 def add_build_actions(parser):
     chroot_parser = argparse.ArgumentParser(add_help=False)
-    chroot_parser.add_argument("--chroot", help="Chroot to build for")
+    chroot_parser.add_argument("--chroot", help="Chroot to build for (deprecated, use --chroots)")
+    chroot_parser.add_argument(
+        "--chroots",
+        help="A list of chroots to build for",
+        default=[],
+        action=CommaSplit
+    )
 
     rpm_parser = argparse.ArgumentParser(add_help=False)
     builder = rpm_parser.add_subparsers(help="Builder", dest="builder")
@@ -154,10 +167,11 @@ def main():
         # Build RPMs
         if args.builder == "copr":
             from rgo.builders.copr import CoprBuilder
+            chroots = [args.chroot] if args.chroot is not None else args.chroots
             builder = CoprBuilder(
                 args.owner,
                 args.project,
-                args.chroot,
+                chroots,
                 delete_after_days=args.delete_project_after_days
             )
             builder.build_components(ovl.components)
