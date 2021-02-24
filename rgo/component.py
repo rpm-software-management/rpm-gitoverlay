@@ -128,7 +128,7 @@ class Component(object):
             with open(_spec_path, "w") as specfile:
                 prepared = "{!s}\n{!s}".format(
                     utils.prepare_spec(spec, version, release, nvr, patches),
-                    utils.generate_changelog(self.git.timestamp, version, release))
+                    utils.generate_changelog(self.git.timestamp, version, release, self.git.get_rpm_changelog()))
                 specfile.write(prepared)
         else:
             # Just copy spec from distgit
