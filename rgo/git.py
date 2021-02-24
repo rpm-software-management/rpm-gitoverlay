@@ -39,6 +39,7 @@ class Git(object):
         self.latest_tag = latest_tag
         self.spec_path = spec_path
         self.cwd = None
+        self.use_current_head = False
 
     def __repr__(self): # pragma: no cover
         return "<Git {!r}>".format(self.src)
@@ -48,12 +49,14 @@ class Git(object):
         :param str dest: Path where to clone
         """
         assert os.path.isabs(dest)
+        self.cwd = dest
+
         if os.path.isdir(dest):
-            LOGGER.info("Using existing git repository: %s", dest)
-            subprocess.run(["git", "log", "-1", "--oneline"], check=True, cwd=dest)
+            # if the git directory already exists, use its HEAD instead of checking out the configured ref
+            self.use_current_head = True
+            LOGGER.info("Using existing git repository: %r HEAD: %r", dest, self.ref_info())
         else:
             subprocess.run(["git", "clone", self.src, dest], check=True)
-        self.cwd = dest
 
     def _latest_tag(self, ref):
         assert self.cwd
@@ -68,6 +71,8 @@ class Git(object):
     @property
     def ref(self):
         assert self.cwd
+        if self.use_current_head:
+            return "HEAD"
         if self.freeze:
             return self.freeze
         if self.latest_tag:
