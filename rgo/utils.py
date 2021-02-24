@@ -40,7 +40,8 @@ def try_prep(srpm):
         else:
             LOGGER.debug(proc.stdout)
 
-def generate_changelog(date, version, release):
+
+def generate_changelog(date, version, release, changelog):
     """Generate dumb changelog.
     :param float timestamp: Date of change
     :param str version: Version
@@ -53,8 +54,13 @@ def generate_changelog(date, version, release):
     out.append("%changelog")
     out.append("* {date} rpm-gitoverlay - {version}-{release}".format(
         date=date, version=version, release=release))
-    out.append("- Built using rpm-gitoverlay")
+    if changelog:
+        out += changelog
+    else:
+        # generate at least one changelog message to avoid rpmbuild errors
+        out.append("- Built using rpm-gitoverlay")
     return "\n".join(out)
+
 
 def prepare_spec(spec, version, release, prefix, patches):
     """Modify spec according our needs.

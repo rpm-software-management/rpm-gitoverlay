@@ -167,6 +167,50 @@ class Git(object):
         version = version.replace("-", "_")
         return version, release
 
+    def _check_output(self, cmd):
+        env = dict(os.environ)
+        env["LC_ALL"] = "C.UTF-8"
+        return subprocess.check_output(cmd, cwd=self.cwd, encoding="utf-8", env=env).strip().splitlines()
+
+    def get_describe_long(self, ref):
+        """
+        Run git describe --tags --long --allways <ref>
+        Return a tuple with the following data:
+          * tag: last available tag in commits <= ref
+          * commits: number of commits between the tag and the ref
+          * hash: hash of the ref
+        """
+        cmd = ["git", "describe", "--tags", "--long", ref]
+        desc = self._check_output(cmd)[0].strip()
+
+        tag, commits, hash = desc.rsplit("-", 2)
+
+        # covert number of commits to integer
+        commits = int(commits)
+
+        # remove the 'g' prefix and keep only the hash
+        hash = hash[1:]
+
+        return tag, commits, hash
+
+    def get_rpm_changelog(self):
+        """
+        Generate RPM changelog records from git history between self.ref and the last tag.
+        If self.ref == last tag, generate a changelog between self.ref and the last but one tag.
+        """
+        # determine the latest tag name and number of commit between ref and the tag
+        tag, commits, _ = self.get_describe_long(self.ref)
+
+        if commits == 0:
+            # ref is tagged, there are no commits going to the changelog
+            # generating an empty changelog is not cool, let's generate a changelog between 2 tags instead
+            tag, _, _ = self.get_describe_long(tag + "^")
+
+        cmd = ["git", "log", "--pretty=format:- [%h] %s (%an)", "{0}..{1}".format(tag, self.ref)]
+        changelog = self._check_output(cmd)
+        return changelog
+
+
 class DistGit(Git):
     """
     In general, distgit is just git repo with spec file and sources. Large files like
