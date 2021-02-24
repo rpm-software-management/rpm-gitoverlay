@@ -15,12 +15,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
-from datetime import datetime
+
 import re
 import subprocess
 import tempfile
+from datetime import datetime
+
+import rpm
+
 from . import LOGGER
 from .git import PatchesAction
+
 
 def try_prep(srpm):
     """Try %prep on .src.rpm.
@@ -72,7 +77,6 @@ def prepare_spec(spec, version, release, prefix, patches):
     :return: Patches RPM spec
     :rtype: str
     """
-    import rpm
     rpmspec = rpm.spec(spec)
 
     # TODO: currently we don't support multiple sources
@@ -120,14 +124,22 @@ def prepare_spec(spec, version, release, prefix, patches):
 
     return "\n".join(out)
 
-def remove_prefix(text, prefix, ignore_case=False):
-    """Strip prefix from text.
-    :param str text: Text
-    :param str prefix: Prefix to strip out
-    :param bool ignore_case: Make prefix case-insensitive for removal
+
+def remove_prefixes(text, prefixes, ignore_case=False):
     """
-    if (ignore_case and re.match(prefix, text, re.I)) or \
-       (not ignore_case and text.startswith(prefix)):
-        return text[len(prefix):]
-    else:
-        return text
+    Strip prefix from text.
+    :param str text: Text
+    :param list prefixes: Prefixes to strip
+    :param bool ignore_case: Make the prefix match case-insensitive
+    """
+    assert isinstance(prefixes, (list, tuple))
+
+    for prefix in prefixes:
+        if ignore_case:
+            if text.lower().startswith(prefix.lower()):
+                return text[len(prefix):]
+        else:
+            if text.startswith(prefix):
+                return text[len(prefix):]
+
+    return text

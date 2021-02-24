@@ -15,11 +15,18 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+
+import datetime
 import enum
 import os
 import shutil
 import subprocess
 from . import LOGGER
+
+import rpm
+
+from . import LOGGER
+
 
 class PatchesAction(enum.Enum):
     keep = "keep"
@@ -126,45 +133,118 @@ class Git(object):
                               stdout=subprocess.PIPE)
         return proc.stdout.rstrip()
 
-    def describe(self, pkg=None):
+    def describe(self, pkg=None, spec_version=None):
         """Get version and release based on git-describe.
         :param str pkg: Package name
+        :param str spec_version: Package version from the spec file
         """
-        from .utils import remove_prefix
+        from .utils import remove_prefixes
         assert self.cwd
         ref = self.ref
-        proc = subprocess.run(["git", "describe", "--tags", "--always", ref],
-                              check=True, cwd=self.cwd, universal_newlines=True,
-                              stdout=subprocess.PIPE)
-        ver = proc.stdout.rstrip()
+
+        tag, commits, hash = self.get_describe_long(ref)
+
+        git_version = tag
+
         if pkg:
-            ver = remove_prefix(ver, pkg, True)
-            ver = remove_prefix(ver, pkg.replace("-", "_"), True)
-        ver = remove_prefix(ver, "v")
-        ver = remove_prefix(ver, "version")
-        ver = remove_prefix(ver, "-")
-        ver = remove_prefix(ver, "_")
-        commit = self.rev_parse(self.ref, short=True)
-        if ver.endswith("-g{!s}".format(commit)):
-            # -X-gYYYYYY
-            tmp = ver.rsplit("-", 2)
-            version = tmp[0]
-            release = "{!s}{!s}".format(tmp[1], tmp[2])
-        elif ver == commit:
-            # YYYYYY
+            # remove package name from version
+            prefixes = [
+                pkg + "-",
+                pkg + "_",
+                pkg.replace("-", "_") + "_",
+            ]
+            git_version = remove_prefixes(git_version, prefixes, ignore_case=True)
+
+        # '-' is not an allowed character in RPM version
+        git_version = git_version.replace("-", ".")
+
+        # convert underscores to dots
+        git_version = git_version.replace("_", ".")
+
+        git_version = remove_prefixes(git_version, ["v"], ignore_case=True)
+
+        # Always prefix release with 0 when building a pre-release build.
+        # The release will change to 1+ when the package is built in a distro.
+
+        # Then append a <date> prefix in YYYYMMDDhhmmss format.
+        # It is important to maintain an upgrade path when a build
+        # is done after a squash merge that reduces number of commits.
+        date = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+
+        if spec_version is not None and spec_version != git_version:
+            # versions in git and spec and differ
+            # we prefer version from the spec in order to keep rpm dependencies working
+            LOGGER.warning("Versions in git and spec file differ, Using version from the spec file: %r", spec_version)
+
+            if rpm.labelCompare(spec_version, git_version) == 1:
+                # pre-release, spec_version > git_version
+
+                # we'll set version to spec_version
+                # it's a pre-release, the release must be < 1
+                # a plain number of commits wouldn't make much sense, that's why prepend git_version
+
+                # Example:
+                #    spec:   version=2.0, release=1
+                #    git:    version=1.9; there are 3 commits after the tag
+                #    result: version=2.0, release=0.YYYYMMDDhhmmss.1.9+3.gcafecafe
+                version = spec_version
+                release = "0.{!s}.{!s}+{!s}.g{!s}".format(date, git_version, commits, hash)
+
+            else:
+                # release + patches, spec_version < git_version (it's not <= because spec_version != git_version)
+
+                # we'll set version to spec_version
+                # there are patches on top of the release, that's why release must be > 1
+                # we do not know how much the release was increased in the distro, let's start with the date which is a huge number
+                # a plain number of commits wouldn't make much sense, that's why prepend git_version
+
+                # Example:
+                #    spec:   version=1.0, release=1
+                #    git:    version=1.9; there are 3 commits after the tag
+                #    result: version=1.0, release=YYYYMMDDhhmmss.1.9+3.gcafecafe
+                version = spec_version
+                release = "{!s}.{!s}+{!s}.g{!s}".format(date, git_version, commits, hash)
+
+        elif not git_version:
+            # pre-release, git version cannot be detected (no git tag)
+
+            # we'll set version to 0
+            # it's a pre-release, the release must be < 1
+
+            # Example:
+            #    spec:   doesn't matter
+            #    git:    no tag; there are 3 commits under the current ref
+            #    result: version=0, release=0.YYYYMMDDhhmmss.3.gcafecafe
             version = "0"
-            proc = subprocess.run(["git", "rev-list", "--count", ref],
-                                  check=True, cwd=self.cwd, universal_newlines=True,
-                                  stdout=subprocess.PIPE)
-            release = "{:d}g{!s}".format(int(proc.stdout.rstrip()), commit)
-        else:
-            # tag
-            version = ver
+            release = "0.{!s}.{!s}.g{!s}".format(date, commits, hash)
+
+        elif commits == 0:
+            # release
+
+            # we'll set version to git_version
+            # it's a release, we'll set release to 1
+
+            # Example:
+            #    spec:   doesn't matter
+            #    git:    version=1.9; there are no commits after the tag
+            #    result: version=0, release=0.YYYYMMDDhhmmss.3.gcafecafe
+            version = git_version
             release = "1"
-        # often (in GNOME) tags are like GNOME_BUILDER_3_21_1
-        version = version.replace("_", ".")
-        # Sometimes there is "-" in version which is not allowed
-        version = version.replace("-", "_")
+
+        else:
+            # release + patches
+
+            # we'll set version to git_version
+            # there are patches on top of the release, release must be > 1
+            # we do not know how much the release was increased in the distro, let's start with the date which is a huge number
+
+            # Example:
+            #    spec:   doesn't matter
+            #    git:    version=1.9; there are 3 commits after the tag
+            #    result: version=1.9, release=YYYYMMDDhhmmss.3.gcafecafe
+            version = git_version
+            release = "{!s}.{!s}.g{!s}".format(date, commits, hash)
+
         return version, release
 
     def _check_output(self, cmd):
@@ -180,8 +260,20 @@ class Git(object):
           * commits: number of commits between the tag and the ref
           * hash: hash of the ref
         """
-        cmd = ["git", "describe", "--tags", "--long", ref]
+        cmd = ["git", "describe", "--tags", "--long", "--always", ref]
         desc = self._check_output(cmd)[0].strip()
+
+        if "-" not in desc:
+            # desc contains only the hash
+            tag = ""
+            hash = desc
+
+            # count all commits
+            cmd = ["git", "rev-list", "--count", ref]
+            commits = self._check_output(cmd)[0].strip()
+            commits = int(commits)
+
+            return tag, commits, hash
 
         tag, commits, hash = desc.rsplit("-", 2)
 

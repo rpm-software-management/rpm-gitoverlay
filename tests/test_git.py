@@ -67,17 +67,34 @@ class TestGit(object):
         # no tags, plain commit
         self.commit("no tags")
         sha = repo.rev_parse("HEAD", short=True)
-        tools.eq_(repo.describe(), ("0", "1g{!s}".format(sha)))
+        ver, rel = repo.describe()
+        tools.eq_(ver, "0")
+        tools.assert_regexp_matches(rel, R"0\.[0-9]{{14}}\.1\.g{!s}".format(sha))
 
         # tag
-        self.tag("0.1")
-        tools.eq_(repo.describe(), ("0.1", "1"))
+        self.tag("1.9")
+        ver, rel = repo.describe()
+        tools.eq_(ver, "1.9")
+        tools.eq_(rel, "1")
 
         # commits after tag
         self.commit("test")
         self.commit("test")
+        self.commit("test")
         sha = repo.rev_parse("HEAD", short=True)
-        tools.eq_(repo.describe(), ("0.1", "2g{!s}".format(sha)))
+        ver, rel = repo.describe()
+        tools.eq_(ver, "1.9")
+        tools.assert_regexp_matches(rel, R"[0-9]{{14}}\.3\.g{!s}".format(sha))
+
+        # commits after tag, spec has a higher version
+        ver, rel = repo.describe(spec_version="2.0")
+        tools.eq_(ver, "2.0")
+        tools.assert_regexp_matches(rel, R"0\.[0-9]{{14}}\.1\.9\+3\.g{!s}".format(sha))
+
+        # commits after tag, spec has a lower version
+        ver, rel = repo.describe(spec_version="1.0")
+        tools.eq_(ver, "1.0")
+        tools.assert_regexp_matches(rel, R"[0-9]{{14}}\.1\.9\+3\.g{!s}".format(sha))
 
         # prefixes
         self.commit("v-prefix")
