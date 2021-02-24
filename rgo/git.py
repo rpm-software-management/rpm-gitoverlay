@@ -76,6 +76,17 @@ class Git(object):
             return self.branch
         return "HEAD"
 
+    def ref_info(self):
+        """
+        Returns descriptive string in form of e.g.:
+        'deadbeef (tag: 1.2.3) Pimp out the code'
+        For informational purposes.
+        """
+        proc = subprocess.run(["git", "log", "-1", "--oneline", self.ref],
+                              check=True, cwd=self.cwd, universal_newlines=True,
+                              stdout=subprocess.PIPE)
+        return proc.stdout.rstrip()
+
     @property
     def timestamp(self):
         assert self.cwd
