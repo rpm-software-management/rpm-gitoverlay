@@ -15,12 +15,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
+
 import os
 import re
 import shutil
 import subprocess
+
+import rpm
+
 from . import LOGGER, utils
 from .git import PatchesAction
+
 
 SRPM_RE = re.compile(r".+\.(?:no)?src\.rpm")
 
@@ -67,7 +72,6 @@ class Component(object):
         os.mkdir(workdir)
 
         assert self.cloned
-        import rpm
         if self.distgit:
             spec_git = self.distgit
             spec_name = "{!s}.spec".format(self.name)
@@ -84,29 +88,30 @@ class Component(object):
                            cwd=spec_git.cwd, check=True, stdout=f_spec)
 
         rpmspec = rpm.spec(spec)
-        _name = rpmspec.sourceHeader["Name"]
-        if isinstance(_name, bytes):
-            _name = _name.decode("utf-8")
-        _spec_path = os.path.join(workdir, "{!s}.spec".format(_name))
-        if self.git:
-            # Get version and release
-            version, release = self.git.describe(self.name)
 
-            # If spec is located in upstream it's possible that version can be changed
-            # which means we also should align it here
-            if not self.distgit:
-                _version = rpmspec.sourceHeader["Version"]
-                if isinstance(_version, bytes):
-                    _version = _version.decode("utf-8")
-                LOGGER.debug("Version in upstream spec file: %r", _version)
-                if rpm.labelCompare((None, _version, None), (None, version, None)) == 1:
-                    # Version in spec > than from git tags
-                    LOGGER.debug("Setting version from upstream spec file")
-                    version = _version
-                    # FIXME: Add prefix 0. to indicate that it was not released yet
-                    # There are no reliable way to get in which commit version was set
-                    # except iterating over commits
-                    release = "0.{!s}".format(release)
+        spec_name = rpmspec.sourceHeader["Name"]
+        if isinstance(spec_name, bytes):
+            spec_name = spec_name.decode("utf-8")
+
+        spec_version = rpmspec.sourceHeader["Version"]
+        if isinstance(spec_version, bytes):
+            spec_version = spec_version.decode("utf-8")
+
+        spec_release = rpmspec.sourceHeader["Release"]
+        if isinstance(spec_release, bytes):
+            spec_release = spec_release.decode("utf-8")
+
+        _spec_path = os.path.join(workdir, "{!s}.spec".format(spec_name))
+        if self.git:
+            if self.distgit:
+                # we're using downstream dist-git spec as a build recipe,
+                # but we want to use the version from upstream git
+                version, release = self.git.describe(self.name)
+            else:
+                # we're using a spec that is part of the git repo we're building from
+                # if spec and git versions do not match, it is considered an intention
+                # and the spec version prevails
+                version, release = self.git.describe(self.name, spec_version=spec_version)
 
             # Prepare archive
             if release == "1":
