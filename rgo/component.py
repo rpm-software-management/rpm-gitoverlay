@@ -176,5 +176,5 @@ class Component(object):
         shutil.move(os.path.join(srpms_dir, srpms[0]), self.srpm)
         shutil.rmtree(workdir)
 
-        LOGGER.info("Built (no)source RPM: %r", self.srpm)
+        LOGGER.info("Built (no)source RPM: %r from %r", self.srpm, self.git.ref_info())
         return self.srpm
