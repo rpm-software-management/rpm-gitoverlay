@@ -23,7 +23,7 @@ import requests
 from .. import LOGGER
 
 class CoprBuilder(object):
-    def __init__(self, owner, name=None, chroots=[], enable_net=False, delete_after_days=None):
+    def __init__(self, owner, name=None, chroots=[], enable_net=False, delete_after_days=None, additional_repos=None):
         """Build RPMs in COPR.
         :param str owner: Project owner
         :param str name: Project name
@@ -57,7 +57,8 @@ class CoprBuilder(object):
                 owner,
                 name,
                 chroots=list(set(list(self.project.chroot_repos.keys()) + chroots)),
-                delete_after_days=delete_after_days
+                delete_after_days=delete_after_days,
+                additional_repos=additional_repos
             )
 
         except copr.exceptions.CoprNoResultException:
@@ -69,7 +70,8 @@ class CoprBuilder(object):
                 name,
                 self.chroots,
                 enable_net=self.enable_net,
-                delete_after_days=delete_after_days
+                delete_after_days=delete_after_days,
+                additional_repos=additional_repos
             )
             LOGGER.info("Created COPR project: %s/%s", self.project.ownername, self.project.name)
 
