@@ -86,13 +86,23 @@ class TestGit(object):
         tools.eq_(ver, "1.9")
         tools.assert_regexp_matches(rel, R"[0-9]{{14}}\.3\.g{!s}".format(sha))
 
-        # commits after tag, spec has a higher version
-        ver, rel = repo.describe(spec_version="2.0")
+        # commits after tag, spec has a higher version, version_from="git"
+        ver, rel = repo.describe(spec_version="2.0", version_from="git")
+        tools.eq_(ver, "1.9")
+        tools.assert_regexp_matches(rel, R"[0-9]{{14}}\.3\.g{!s}".format(sha))
+
+        # commits after tag, spec has a higher version, version_from="spec"
+        ver, rel = repo.describe(spec_version="2.0", version_from="spec")
         tools.eq_(ver, "2.0")
         tools.assert_regexp_matches(rel, R"0\.[0-9]{{14}}\.1\.9\+3\.g{!s}".format(sha))
 
-        # commits after tag, spec has a lower version
-        ver, rel = repo.describe(spec_version="1.0")
+        # commits after tag, spec has a lower version, version_from="git"
+        ver, rel = repo.describe(spec_version="1.0", version_from="git")
+        tools.eq_(ver, "1.9")
+        tools.assert_regexp_matches(rel, R"[0-9]{{14}}\.3\.g{!s}".format(sha))
+
+        # commits after tag, spec has a lower version, version_from="spec"
+        ver, rel = repo.describe(spec_version="1.0", version_from="spec")
         tools.eq_(ver, "1.0")
         tools.assert_regexp_matches(rel, R"[0-9]{{14}}\.1\.9\+3\.g{!s}".format(sha))
 

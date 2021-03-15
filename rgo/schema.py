@@ -81,6 +81,7 @@ class DistGitSchema(GitSchema):
 
 class ComponentSchema(Schema):
     name = String(required=True)
+    version_from = String(data_key="version-from")
     git = Nested(GitSchema)
     distgit = Nested(DistGitSchema)
     requires = List(String())

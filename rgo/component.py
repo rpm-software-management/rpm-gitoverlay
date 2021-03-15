@@ -30,7 +30,7 @@ from .git import PatchesAction
 SRPM_RE = re.compile(r".+\.(?:no)?src\.rpm")
 
 class Component(object):
-    def __init__(self, name, git=None, distgit=None, requires=[]):
+    def __init__(self, name, version_from=None, git=None, distgit=None, requires=[]):
         """
         :param str name: Name of component
         :param rgo.git.Git: Git repository
@@ -38,8 +38,17 @@ class Component(object):
         """
         assert git or distgit
         self.name = name
+
         self.git = git
         self.distgit = distgit
+        self.version_from = version_from
+
+        if self.version_from is None:
+            if self.distgit:
+                self.version_from = "git"
+            else:
+                self.version_from = "spec"
+
         self.requires = set(requires)
         self.cloned = False
 
@@ -72,6 +81,7 @@ class Component(object):
         os.mkdir(workdir)
 
         assert self.cloned
+        LOGGER.info("Building (no)source RPM for component {}".format(self.name))
         if self.distgit:
             spec_git = self.distgit
             spec_name = "{!s}.spec".format(self.name)
@@ -102,16 +112,9 @@ class Component(object):
             spec_release = spec_release.decode("utf-8")
 
         _spec_path = os.path.join(workdir, "{!s}.spec".format(spec_name))
+
         if self.git:
-            if self.distgit:
-                # we're using downstream dist-git spec as a build recipe,
-                # but we want to use the version from upstream git
-                version, release = self.git.describe(self.name)
-            else:
-                # we're using a spec that is part of the git repo we're building from
-                # if spec and git versions do not match, it is considered an intention
-                # and the spec version prevails
-                version, release = self.git.describe(self.name, spec_version=spec_version)
+            version, release = self.git.describe(self.name, spec_version=spec_version, version_from=self.version_from)
 
             # Prepare archive
             if release == "1":

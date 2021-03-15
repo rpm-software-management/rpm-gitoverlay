@@ -133,13 +133,15 @@ class Git(object):
                               stdout=subprocess.PIPE)
         return proc.stdout.rstrip()
 
-    def describe(self, pkg=None, spec_version=None):
+    def describe(self, pkg=None, spec_version=None, version_from="git"):
         """Get version and release based on git-describe.
         :param str pkg: Package name
         :param str spec_version: Package version from the spec file
+        :param str version_from: Where does the version come from: git, spec
         """
         from .utils import remove_prefixes
         assert self.cwd
+        assert version_from in ("git", "spec")
         ref = self.ref
 
         tag, commits, hash = self.get_describe_long(ref)
@@ -171,11 +173,7 @@ class Git(object):
         # is done after a squash merge that reduces number of commits.
         date = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
-        if spec_version is not None and spec_version != git_version:
-            # versions in git and spec and differ
-            # we prefer version from the spec in order to keep rpm dependencies working
-            LOGGER.warning("Versions in git and spec file differ, Using version from the spec file: %r", spec_version)
-
+        if version_from == "spec" and spec_version != git_version:
             if rpm.labelCompare(spec_version, git_version) == 1:
                 # pre-release, spec_version > git_version
 
@@ -244,6 +242,8 @@ class Git(object):
             #    result: version=1.9, release=YYYYMMDDhhmmss.3.gcafecafe
             version = git_version
             release = "{!s}.{!s}.g{!s}".format(date, commits, hash)
+
+        LOGGER.info("Using version from {!s}: {!s}".format(version_from, version))
 
         return version, release
 
