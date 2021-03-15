@@ -3,5 +3,10 @@ language: python
 python:
   - "3.6"
 cache: pip
+before_install:
+  # required by rpm-py-installer
+  - sudo apt-get install rpm
+  # `sudo apt-get -y python3-rpm` is not sufficient because we're working in virtualenv
+  - pip install rpm-py-installer
 install: pip install .
 script: python setup.py test
