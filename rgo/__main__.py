@@ -61,7 +61,6 @@ class CommaSplit(argparse._AppendAction):
 
 def add_build_actions(parser):
     chroot_parser = argparse.ArgumentParser(add_help=False)
-    chroot_parser.add_argument("--chroot", help="Chroot to build for (deprecated, use --chroots)")
     chroot_parser.add_argument(
         "--chroots",
         help="A comma-separated list of chroots to build for",
@@ -173,11 +172,10 @@ def main():
         # Build RPMs
         if args.builder == "copr":
             from rgo.builders.copr import CoprBuilder
-            chroots = [args.chroot] if args.chroot is not None else args.chroots
             builder = CoprBuilder(
                 args.owner,
                 args.project,
-                chroots,
+                args.chroots,
                 delete_after_days=args.delete_project_after_days,
                 additional_repos=args.additional_repos,
                 build_with=args.build_with.strip()
