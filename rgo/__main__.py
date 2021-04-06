@@ -64,12 +64,13 @@ def add_build_actions(parser):
     chroot_parser.add_argument("--chroot", help="Chroot to build for (deprecated, use --chroots)")
     chroot_parser.add_argument(
         "--chroots",
-        help="A list of chroots to build for",
+        help="A comma-separated list of chroots to build for",
         default=[],
         action=CommaSplit
     )
 
     rpm_parser = argparse.ArgumentParser(add_help=False)
+    chroot_parser.add_argument("--with", help="space-separated rpmbuild --with options to use", dest="build_with")
     builder = rpm_parser.add_subparsers(help="Builder", dest="builder")
     builder.required = True
     builder.add_parser("rpmbuild", help="Build using rpmbuild")
@@ -178,7 +179,8 @@ def main():
                 args.project,
                 chroots,
                 delete_after_days=args.delete_project_after_days,
-                additional_repos=args.additional_repos
+                additional_repos=args.additional_repos,
+                build_with=args.build_with.strip()
             )
             builder.build_components(ovl.components)
 

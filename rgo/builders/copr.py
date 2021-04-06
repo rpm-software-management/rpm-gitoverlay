@@ -23,7 +23,16 @@ import requests
 from .. import LOGGER
 
 class CoprBuilder(object):
-    def __init__(self, owner, name=None, chroots=[], enable_net=False, delete_after_days=None, additional_repos=None):
+    def __init__(
+        self,
+        owner,
+        name=None,
+        chroots=[],
+        enable_net=False,
+        delete_after_days=None,
+        additional_repos=None,
+        build_with=None
+    ):
         """Build RPMs in COPR.
         :param str owner: Project owner
         :param str name: Project name
@@ -74,6 +83,10 @@ class CoprBuilder(object):
                 additional_repos=additional_repos
             )
             LOGGER.info("Created COPR project: %s/%s", self.project.ownername, self.project.name)
+
+        if build_with:
+            for chroot in self.chroots:
+                self.client.project_chroot_proxy.edit(owner, name, chroot, with_opts=build_with)
 
         LOGGER.info("COPR Project URL: %r", self.project_url)
 
