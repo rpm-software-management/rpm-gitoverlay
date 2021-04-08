@@ -69,7 +69,13 @@ def add_build_actions(parser):
     )
 
     rpm_parser = argparse.ArgumentParser(add_help=False)
-    chroot_parser.add_argument("--with", help="space-separated rpmbuild --with options to use", dest="build_with")
+    rpm_parser.add_argument(
+        "--with",
+        help="space-separated rpmbuild --with options to use",
+        dest="build_with",
+        default=""
+    )
+
     builder = rpm_parser.add_subparsers(help="Builder", dest="builder")
     builder.required = True
     builder.add_parser("rpmbuild", help="Build using rpmbuild")
