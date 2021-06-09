@@ -26,9 +26,6 @@ class AliasSchema(Schema):
     name = String(required=True)
     url = String(required=True)
 
-    class Meta:
-        strict = True
-
     @validates_schema(pass_many=True)
     def validate_aliases(self, data, many, **kwargs):
         if not many:
@@ -51,9 +48,6 @@ class GitSchema(Schema):
     latest_tag = Boolean(data_key="latest-tag")
     spec_path = String(data_key="spec-path")
 
-    class Meta:
-        strict = True
-
     @validates_schema
     def validate_options(self, data, **kwargs):
         if "freeze" in data and "branch" in data:
@@ -70,7 +64,6 @@ class DistGitSchema(GitSchema):
     type = Enum(git.DistGitType, by_value=True)
 
     class Meta:
-        strict = True
         exclude = ("latest_tag", "spec_path")
 
     @post_load
@@ -86,9 +79,6 @@ class ComponentSchema(Schema):
     distgit = Nested(DistGitSchema)
     requires = List(String())
 
-    class Meta:
-        strict = True
-
     @validates_schema
     def validate_parameters(self, data, **kwargs):
         if "git" not in data and "distgit" not in data:
@@ -101,9 +91,6 @@ class ComponentSchema(Schema):
 class OverlaySchema(Schema):
     aliases = Nested(AliasSchema, many=True)
     components = Nested(ComponentSchema, many=True, required=True)
-
-    class Meta:
-        strict = True
 
     @post_load
     def make_object(self, data, **kwargs):
