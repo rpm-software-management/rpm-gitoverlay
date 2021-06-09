@@ -107,10 +107,6 @@ class Component(object):
         if isinstance(spec_version, bytes):
             spec_version = spec_version.decode("utf-8")
 
-        spec_release = rpmspec.sourceHeader["Release"]
-        if isinstance(spec_release, bytes):
-            spec_release = spec_release.decode("utf-8")
-
         _spec_path = os.path.join(workdir, "{!s}.spec".format(spec_name))
 
         if self.git:
