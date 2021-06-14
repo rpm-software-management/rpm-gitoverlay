@@ -61,10 +61,11 @@ class GitSchema(Schema):
 
 class DistGitSchema(GitSchema):
     patches = Enum(git.PatchesAction, by_value=True)
+    patches_dir = String(data_key="patches-dir")
     type = Enum(git.DistGitType, by_value=True)
 
     class Meta:
-        exclude = ("latest_tag", "spec_path")
+        exclude = ["latest_tag"]
 
     @post_load
     def make_object(self, data, **kwargs):

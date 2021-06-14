@@ -318,17 +318,20 @@ class DistGit(Git):
     DIST_GITS = {"pkgs.fedoraproject.org": "fedpkg",
                  "pkgs.devel.redhat.com": "rhpkg"}
 
-    def __init__(self, src, freeze=None, branch=None,
-                 patches=PatchesAction.keep, type_=DistGitType.auto):
+    def __init__(self, src, freeze=None, branch=None, spec_path=None,
+                 patches=PatchesAction.keep, patches_dir="", type_=DistGitType.auto):
         """
         :param str src: URL to git repo
         :param str freeze: Commit to freeze repo on
         :param str branch: Branch to freeze repo on
+        :param str spec_path: Path to specfile
         :param rgo.git.PatchesAction patches: What to do with patches
+        :param str patches_dir: Path to a directory with patches from specfile
         :param rgo.git.DistGitType type_: Type of distgit
         """
-        super().__init__(src, freeze=freeze, branch=branch)
+        super().__init__(src, freeze=freeze, branch=branch, spec_path=spec_path)
         self.patches = patches
+        self.patches_dir = patches_dir
         self.type = type_
 
     def __repr__(self): # pragma: no cover
