@@ -30,7 +30,7 @@ from .git import PatchesAction
 SRPM_RE = re.compile(r".+\.(?:no)?src\.rpm")
 
 class Component(object):
-    def __init__(self, name, version_from=None, git=None, distgit=None, requires=[]):
+    def __init__(self, name, version_from=None, git=None, distgit=None, requires=None, distgit_overrides=None):
         """
         :param str name: Name of component
         :param rgo.git.Git: Git repository
@@ -49,8 +49,14 @@ class Component(object):
             else:
                 self.version_from = "spec"
 
+        if requires is None:
+            requires = []
         self.requires = set(requires)
         self.cloned = False
+
+        if distgit_overrides is None:
+            distgit_overrides = []
+        self.distgit_overrides = set(distgit_overrides)
 
         self.build_id = None
         self.done = None
@@ -69,6 +75,8 @@ class Component(object):
             self.git.clone(os.path.join(dest, self.name))
         if self.distgit:
             self.distgit.clone(os.path.join(dest, "{!s}-distgit".format(self.name)))
+        for override in self.distgit_overrides:
+            override.clone(os.path.join(dest, "{!s}-override-{!s}".format(self.name, override.src)))
         self.cloned = True
 
     def make_srpm(self, tmpdir):
