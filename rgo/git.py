@@ -360,3 +360,28 @@ class DistGit(Git):
         elif self.real_type == DistGitType.git:
             # Everything stored in git and we already have everything
             pass
+
+
+class DistGitOverride(DistGit):
+    def __init__(self, src, freeze=None, branch=None, spec_path=None, chroots=None,
+                 patches=PatchesAction.keep, patches_dir="", type_=DistGitType.auto):
+        """
+        :param str src: URL to git repo
+        :param str freeze: Commit to freeze repo on
+        :param str branch: Branch to freeze repo on
+        :param str spec_path: Path to specfile
+        :param list chroots: list of strings representing different chroots
+        :param rgo.git.PatchesAction patches: What to do with patches
+        :param str patches_dir: Path to a directory with patches from specfile
+        :param rgo.git.DistGitType type_: Type of distgit
+        """
+        super().__init__(src, freeze=freeze, branch=branch, spec_path=spec_path,
+                         patches=patches, patches_dir=patches_dir, type_=type_)
+        if chroots is None:
+            chroots = []
+        self.chroots = chroots
+        self.build_id = None
+        self.srpm = None
+
+    def __repr__(self):  # pragma: no cover
+        return "<DistGitOverride {!r} for {!r}>".format(self.src, self.chroots)

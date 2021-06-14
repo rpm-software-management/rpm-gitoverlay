@@ -22,6 +22,7 @@ from marshmallow.fields import String, Boolean, Nested, List
 from marshmallow_enum import EnumField as Enum
 from . import alias, git, component, overlay
 
+
 class AliasSchema(Schema):
     name = String(required=True)
     url = String(required=True)
@@ -41,6 +42,7 @@ class AliasSchema(Schema):
         else:
             return alias.Alias(**data)
 
+
 class GitSchema(Schema):
     src = String(required=True)
     freeze = String()
@@ -59,6 +61,7 @@ class GitSchema(Schema):
     def make_object(self, data, **kwargs):
         return git.Git(**data)
 
+
 class DistGitSchema(GitSchema):
     patches = Enum(git.PatchesAction, by_value=True)
     patches_dir = String(data_key="patches-dir")
@@ -73,12 +76,22 @@ class DistGitSchema(GitSchema):
             data["type_"] = data.pop("type")
         return git.DistGit(**data)
 
+
+class DistGitOverrideSchema(DistGitSchema):
+    chroots = List(String())
+
+    @post_load
+    def make_object(self, data, **kwargs):
+        return git.DistGitOverride(**data)
+
+
 class ComponentSchema(Schema):
     name = String(required=True)
     version_from = String(data_key="version-from")
     git = Nested(GitSchema)
     distgit = Nested(DistGitSchema)
     requires = List(String())
+    distgit_overrides = List(Nested(DistGitOverrideSchema), data_key="distgit-overrides")
 
     @validates_schema
     def validate_parameters(self, data, **kwargs):
@@ -88,6 +101,7 @@ class ComponentSchema(Schema):
     @post_load
     def make_object(self, data, **kwargs):
         return component.Component(**data)
+
 
 class OverlaySchema(Schema):
     aliases = Nested(AliasSchema, many=True)
