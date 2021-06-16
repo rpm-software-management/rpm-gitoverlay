@@ -170,11 +170,16 @@ def main():
         # Build SRPMs
         component.make_srpms(tmpdir)
         utils.try_prep(component.srpm)
+        for override in component.distgit_overrides:
+            utils.try_prep(override.srpm)
 
+    out = []
     if args.build_action == "srpm":
-        out = [c.srpm for c in ovl.components]
+        for component in ovl.components:
+            out.append(component.srpm)
+            for override in component.distgit_overrides:
+                out.append("  " + override.srpm)
     elif args.build_action == "rpm":
-        out = []
         # Build RPMs
         if args.builder == "copr":
             from rgo.builders.copr import CoprBuilder
@@ -194,6 +199,7 @@ def main():
             from rgo.builders.rpmbuild import RpmBuilder
             builder = RpmBuilder()
             for component in ovl.components:
+                # RpmBuild cannot handle different roots, so we don't event try to build srpms from distgit-overrides
                 out.extend(builder.build(component.srpm))
                 # We don't care about SRPM anymore
                 os.remove(component.srpm)
