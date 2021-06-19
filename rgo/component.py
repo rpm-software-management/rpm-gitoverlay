@@ -94,33 +94,35 @@ class Component(object):
         spec_name = distgit.spec_path or "{!s}.spec".format(self.name)
 
         # extract spec file from specified branch and save it in temporary location
-        spec = os.path.join(workdir, "original.spec")
-        with open(spec, "w") as f_spec:
+        original_spec_path = os.path.join(workdir, "original.spec")
+        with open(original_spec_path, "w") as f_spec:
             subprocess.run(["git", "cat-file", "-p", "{}:{}".format(distgit.ref, spec_name)],
                            cwd=distgit.cwd, check=True, stdout=f_spec)
 
-        rpmspec = rpm.spec(spec)
+        original_rpmspec = rpm.spec(original_spec_path)
 
-        spec_name = rpmspec.sourceHeader["Name"]
+        spec_name = original_rpmspec.sourceHeader["Name"]
         if isinstance(spec_name, bytes):
             spec_name = spec_name.decode("utf-8")
 
-        spec_version = rpmspec.sourceHeader["Version"]
+        spec_version = original_rpmspec.sourceHeader["Version"]
         if isinstance(spec_version, bytes):
             spec_version = spec_version.decode("utf-8")
 
-        _spec_path = os.path.join(workdir, "{!s}.spec".format(spec_name))
+        final_spec_path = os.path.join(workdir, "{!s}.spec".format(spec_name))
 
+        # PREPARE SPECFILE AND ARCHIVE
         if self.git:
             version, release = self.git.describe(self.name, spec_version=spec_version, version_from=self.version_from)
 
-            # Prepare archive
+            # Prepare nvr
             if release == "1":
                 # tagged version, no need to add useless numbers
                 nvr = "{!s}-{!s}".format(self.name, version)
             else:
                 nvr = "{!s}-{!s}-{!s}".format(self.name, version, release)
 
+            # Prepare archive from git (compressed tarball)
             archive = os.path.join(workdir, "{!s}.tar.xz".format(nvr))
             LOGGER.debug("Preparing archive %r", archive)
             proc = subprocess.run(["git", "archive", "--prefix={!s}/".format(nvr),
@@ -132,40 +134,36 @@ class Component(object):
                                check=True, input=proc.stdout, stdout=f_archive)
 
             # Prepare new spec
-            with open(_spec_path, "w") as specfile:
+            with open(final_spec_path, "w") as specfile:
                 prepared = "{!s}\n{!s}".format(
                     utils.prepare_spec(original_spec_path, version, release, nvr, patches_action),
                     utils.generate_changelog(self.git.timestamp, version, release, self.git.get_rpm_changelog()))
                 specfile.write(prepared)
         else:
-            # Just copy spec from distgit
-            shutil.copy2(spec, _spec_path)
-        spec = _spec_path
+            # If no git specified use distgit for both specfile and source code.
+            # We could simply copy specifile like this:
+            # shutil.copy2(original_spec_path, final_spec_path)
+            # but getting the source code (tarball) is not so simple.
+            raise NotImplementedError("Getting a tarball from distgit is not implemented")
 
-        _sources = []
-        for src, _, src_type in rpm.spec(spec).sources:
-            if src_type == rpm.RPMBUILD_ISPATCH:
-                if patches_action == PatchesAction.keep:
+        # PREPARE SPECFILE PATCHES
+        if patches_action == PatchesAction.keep:
+            _sources = []
+            for src, _, src_type in rpm.spec(final_spec_path).sources:
+                if src_type == rpm.RPMBUILD_ISPATCH:
                     _sources.append(src)
-            elif src_type == rpm.RPMBUILD_ISSOURCE:
-                # src in fact is url, but we need filename. We don't want to get
-                # Content-Disposition from HTTP headers, because link could be not
-                # available anymore or broken.
-                src = os.path.basename(src)
-                if self.git and src == os.path.basename(archive):
-                    # Skip sources which are just built
-                    continue
-                _sources.append(src)
-        if _sources and not distgit:
-            raise NotImplementedError("Patches/Sources are applied in upstream")
-        # Copy sources/patches from distgit
-        for source in _sources:
-            shutil.copy2(os.path.join(distgit.cwd, source),
-                         os.path.join(workdir, source))
 
-        # Build .(no)src.rpm
+            if _sources and not distgit:
+                raise NotImplementedError("Patches are applied in upstream")
+            else:
+                # Copy sources/patches from distgit
+                for source in _sources:
+                    shutil.copy2(os.path.join(distgit.cwd, distgit.patches_dir, source),
+                                 os.path.join(workdir, source))
+
+        # RPMBUILD SRPM
         try:
-            result = subprocess.run(["rpmbuild", "-bs", _spec_path, "--nodeps",
+            result = subprocess.run(["rpmbuild", "-bs", final_spec_path, "--nodeps",
                                      "--define", "_topdir {!s}".format(workdir),
                                      "--define", "_sourcedir {!s}".format(workdir)],
                                     check=True, universal_newlines=True,
@@ -175,6 +173,7 @@ class Component(object):
             raise
         else:
             LOGGER.debug(result.stdout)
+
         srpms_dir = os.path.join(workdir, "SRPMS")
         srpms = [f for f in os.listdir(srpms_dir) if SRPM_RE.search(f)]
         assert len(srpms) == 1, "We expect 1 .(no)src.rpm, but we found: {!r}".format(srpms)
