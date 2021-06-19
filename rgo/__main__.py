@@ -168,7 +168,7 @@ def main():
     tmpdir = tempfile.mkdtemp(prefix="rgo", suffix="-build")
     for component in ovl.components:
         # Build SRPMs
-        component.make_srpm(tmpdir)
+        component.make_srpms(tmpdir)
         utils.try_prep(component.srpm)
 
     if args.build_action == "srpm":
