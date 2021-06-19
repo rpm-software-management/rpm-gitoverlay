@@ -79,31 +79,25 @@ class Component(object):
             override.clone(os.path.join(dest, "{!s}-override-{!s}".format(self.name, override.src)))
         self.cloned = True
 
-    def make_srpm(self, tmpdir):
+    def _make_srpm(self, tmpdir, distgit, patches_action):
         """
         Build SRPM.
-
-        :param str tmpdir: Temporary directory to work in
+        :param str tmpdir: Dir where to create the new srpm
+        :param str distgit: Distgit repository if specified used for Specfile and pathes
+        :param PatchesAction patches_action: What to do with patches
+        :return: Path to the built srpm
+        :rtype: str
         """
         workdir = os.path.join(tmpdir, self.name)
         os.mkdir(workdir)
 
-        assert self.cloned
-        LOGGER.info("Building (no)source RPM for component {}".format(self.name))
-        if self.distgit:
-            spec_git = self.distgit
-            spec_name = "{!s}.spec".format(self.name)
-            patches = self.distgit.patches
-        else:
-            spec_git = self.git
-            spec_name = self.git.spec_path or "{!s}.spec".format(self.name)
-            patches = PatchesAction.keep
+        spec_name = distgit.spec_path or "{!s}.spec".format(self.name)
 
         # extract spec file from specified branch and save it in temporary location
         spec = os.path.join(workdir, "original.spec")
         with open(spec, "w") as f_spec:
-            subprocess.run(["git", "cat-file", "-p", "{}:{}".format(spec_git.ref, spec_name)],
-                           cwd=spec_git.cwd, check=True, stdout=f_spec)
+            subprocess.run(["git", "cat-file", "-p", "{}:{}".format(distgit.ref, spec_name)],
+                           cwd=distgit.cwd, check=True, stdout=f_spec)
 
         rpmspec = rpm.spec(spec)
 
@@ -126,6 +120,7 @@ class Component(object):
                 nvr = "{!s}-{!s}".format(self.name, version)
             else:
                 nvr = "{!s}-{!s}-{!s}".format(self.name, version, release)
+
             archive = os.path.join(workdir, "{!s}.tar.xz".format(nvr))
             LOGGER.debug("Preparing archive %r", archive)
             proc = subprocess.run(["git", "archive", "--prefix={!s}/".format(nvr),
@@ -139,7 +134,7 @@ class Component(object):
             # Prepare new spec
             with open(_spec_path, "w") as specfile:
                 prepared = "{!s}\n{!s}".format(
-                    utils.prepare_spec(spec, version, release, nvr, patches),
+                    utils.prepare_spec(original_spec_path, version, release, nvr, patches_action),
                     utils.generate_changelog(self.git.timestamp, version, release, self.git.get_rpm_changelog()))
                 specfile.write(prepared)
         else:
@@ -150,7 +145,7 @@ class Component(object):
         _sources = []
         for src, _, src_type in rpm.spec(spec).sources:
             if src_type == rpm.RPMBUILD_ISPATCH:
-                if patches == PatchesAction.keep:
+                if patches_action == PatchesAction.keep:
                     _sources.append(src)
             elif src_type == rpm.RPMBUILD_ISSOURCE:
                 # src in fact is url, but we need filename. We don't want to get
@@ -161,11 +156,11 @@ class Component(object):
                     # Skip sources which are just built
                     continue
                 _sources.append(src)
-        if _sources and not self.distgit:
+        if _sources and not distgit:
             raise NotImplementedError("Patches/Sources are applied in upstream")
         # Copy sources/patches from distgit
         for source in _sources:
-            shutil.copy2(os.path.join(self.distgit.cwd, source),
+            shutil.copy2(os.path.join(distgit.cwd, source),
                          os.path.join(workdir, source))
 
         # Build .(no)src.rpm
@@ -183,10 +178,39 @@ class Component(object):
         srpms_dir = os.path.join(workdir, "SRPMS")
         srpms = [f for f in os.listdir(srpms_dir) if SRPM_RE.search(f)]
         assert len(srpms) == 1, "We expect 1 .(no)src.rpm, but we found: {!r}".format(srpms)
+        srpm_path = os.path.join(srpms_dir, srpms[0])
 
-        self.srpm = os.path.join(tmpdir, srpms[0])
-        shutil.move(os.path.join(srpms_dir, srpms[0]), self.srpm)
+        # CLEAN UP WORKDIR
+        name_prefix = ""
+        if hasattr(distgit, 'chroots'):
+            name_prefix = "-".join(distgit.chroots) + "-"
+
+        final_moved_out_srpm = os.path.join(tmpdir, name_prefix + srpms[0])
+        shutil.move(srpm_path, final_moved_out_srpm)
+        LOGGER.info("Built (no)source RPM: %r from %r", final_moved_out_srpm, distgit.ref_info())
         shutil.rmtree(workdir)
 
-        LOGGER.info("Built (no)source RPM: %r from %r", self.srpm, self.git.ref_info())
+        return final_moved_out_srpm
+
+    def make_srpms(self, tmpdir):
+        """
+        Build SRPM and if any distgit_overrides are configured build SRPMs for them as well.
+
+        :param str tmpdir: Temporary directory to work in
+        """
+        assert self.cloned
+        LOGGER.info("Building (no)source RPM for component {}".format(self.name))
+        if self.distgit:
+            spec_git = self.distgit
+            patches = self.distgit.patches
+        else:
+            spec_git = self.git
+            patches = PatchesAction.keep
+
+        # Build default srpm
+        self.srpm = self._make_srpm(tmpdir, spec_git, patches)
+        # Build distgit_overrides srpms
+        for distgit_override in self.distgit_overrides:
+            distgit_override.srpm = self._make_srpm(tmpdir, distgit_override, distgit_override.patches)
+
         return self.srpm
