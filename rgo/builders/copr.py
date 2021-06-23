@@ -61,6 +61,9 @@ class CoprBuilder(object):
             self.project = self.client.project_proxy.get(owner, name)
             LOGGER.info("Using existing COPR project: %s/%s", self.project.ownername, self.project.name)
 
+            if len(chroots) == 0:
+                self.chroots = self.project.chroot_repos.keys()
+
             # add the build chroots to the project's chroots and extend its expiration time
             self.client.project_proxy.edit(
                 owner,
@@ -98,6 +101,7 @@ class CoprBuilder(object):
 
     def _build_url(self, build_id):
         return self.project_url + "/build/%s" % build_id
+
 
     def build_components(self, components):
         # A list of lists; the first list contains components that have no requires,
@@ -148,32 +152,79 @@ class CoprBuilder(object):
                 component.build_id = with_build_id
             after_build_id = with_build_id
 
+    def _create_copr_build(self, chroots, srpm, name, buildopts):
+        buildopts["chroots"] = list(chroots)
+        build = self.client.build_proxy.create_from_file(self.owner,
+                                                         self.name,
+                                                         srpm,
+                                                         buildopts=buildopts)
+        LOGGER.info('Submitted Copr build for %s chroots: %s %s%sURL: %s' % (
+            name, ", ".join(buildopts["chroots"]),
+            "with: %s " % buildopts["with_build_id"] if buildopts["with_build_id"] is not None else "",
+            "after: %s " % buildopts["after_build_id"] if buildopts["after_build_id"] is not None else "",
+            self._build_url(build.id)
+        ))
+        return build.id
+
 
     def build(self, component, with_build_id=None, after_build_id=None):
-        """Build RPM(s) from SRPM.
+        """Build RPM(s) from default SRPM and from distgit-overrides SRPMs (it also sets their build ids).
         :param component: The component to build
         :param with_build_id: ID of the build to build "with" in Copr build batches
         :param after_build_id: ID of the build to build "after" in Copr build batches
-        :return: the Copr build id
+        :return: the Copr build id of the first build created
         """
         buildopts = {
             "with_build_id": with_build_id,
             "after_build_id": after_build_id,
         }
 
-        if self.chroots:
-            buildopts["chroots"] = self.chroots
+        first_build_id = None
 
-        build = self.client.build_proxy.create_from_file(self.owner, self.name, component.srpm, buildopts=buildopts)
-        LOGGER.info('Submitted Copr build for %s chroots: %s %s%sURL: %s' % (
-            component.name,
-            ", ".join(buildopts["chroots"]) if "chroots" in buildopts else "(all)",
-            "with: %s " % with_build_id if with_build_id is not None else "",
-            "after: %s " % after_build_id if after_build_id is not None else "",
-            self._build_url(build.id)
-        ))
+        overriden_chroots = set()
+        for override in component.distgit_overrides:
+            overriden_chroots.update(override.chroots)
 
-        return build.id
+        default_build_chroots = list(set(self.chroots) - overriden_chroots)
+        # if we have atleast one default (not overriden) chroot do the default build
+        if (default_build_chroots):
+            first_build_id = self._create_copr_build(default_build_chroots, component.srpm, component.name, buildopts)
+
+        for override in component.distgit_overrides:
+            # if we haven't yet configured buildopts["with_build_id"] and we have a first_build_id use it
+            if buildopts["with_build_id"] is None and first_build_id:
+                buildopts["with_build_id"] = first_build_id
+
+            # use override only if we build for its chroots
+            override_chroots = set(override.chroots) & set(self.chroots)
+            if override_chroots:
+                override.build_id = self._create_copr_build(override_chroots, override.srpm, component.name, buildopts)
+                if not first_build_id:
+                    first_build_id = override.build_id
+
+        return first_build_id
+
+    @staticmethod
+    def _report_build_proxy_and_get_status(build_proxy, name):
+        """
+        Report status of the build through LOGGER and return its status
+        :param ProxyBuild build_proxy: Copr object representing a build
+        :param str name: Name of the build
+        :return: Bool whether build ended and a Bool whether if faild or succeeded
+        :rtype: bool, bool
+        """
+        if build_proxy.ended_on:
+            if build_proxy.state == "succeeded":
+                LOGGER.info("  build #%d - %s: succeeded", build_proxy.id, name)
+                return True, False
+            else:
+                # failed/cancelled
+                LOGGER.info("  build #%d - %s: %s", build_proxy.id, name, build_proxy.state)
+                return True, True
+        else:
+            LOGGER.info("  build #%d - %s: %s", build_proxy.id, name, build_proxy.state)
+            return False, False
+
 
     def wait_for_results(self):
         failed = False
@@ -189,26 +240,23 @@ class CoprBuilder(object):
 
                 done = True
                 for component in batch:
-                    if component.done:
-                        continue
-
-                    build = self.client.build_proxy.get(component.build_id)
-
-                    component.state = build.state
-                    component.done = build.state not in ("waiting", "forked", "running", "pending", "starting", "importing")
-                    component.success = build.state == "succeeded"
-
-                    if component.done:
-                        if component.success:
-                            LOGGER.info("  build #%d - %s: succeeded", component.build_id, component.name)
-                        else:
-                            # failed/cancelled
-                            LOGGER.info("  build #%d - %s: %s", component.build_id, component.name, component.state)
-                            failed = True
-                    else:
-                        done = False
-                        LOGGER.info("  build #%d - %s: %s", component.build_id, component.name, component.state)
-
+                    if component.build_id:
+                        if not component.done:
+                            component.build_proxy = self.client.build_proxy.get(component.build_id)
+                            component.done, failed = CoprBuilder._report_build_proxy_and_get_status(
+                                component.build_proxy,
+                                component.name)
+                            if not component.done:
+                                done = False
+                    for override in component.distgit_overrides:
+                        if override.build_id:
+                            if not override.done:
+                                override.build_proxy = self.client.build_proxy.get(override.build_id)
+                                override.done, failed = CoprBuilder._report_build_proxy_and_get_status(
+                                        override.build_proxy,
+                                        ", ".join(override.chroots) + " distgit-override " + component.name)
+                                if not override.done:
+                                    done = False
                 if done:
                     break
 
@@ -218,10 +266,20 @@ class CoprBuilder(object):
             LOGGER.info("Failed builds:")
             for batch in self.build_batches:
                 for component in batch:
-                    if not component.success:
+                    if not component.build_proxy.state == "succeeded":
                         LOGGER.info("  build #%d - %s (%s): %s",
-                            component.build_id, component.name, component.state, self._build_url(component.build_id)
-                        )
+                                    component.build_id,
+                                    component.name,
+                                    component.build_proxy.state,
+                                    self._build_url(component.build_id))
+                    for override in component.distgit_overrides:
+                        if not override.build_proxy.state == "succeeded":
+                            LOGGER.info("  distgit-override build #%d - %s (%s): %s",
+                                        override.build_id,
+                                        component.name,
+                                        override.build_proxy.state,
+                                        self._build_url(override.build_id))
+
 
             raise Exception("Some builds have failed")
 
