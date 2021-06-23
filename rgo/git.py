@@ -382,6 +382,8 @@ class DistGitOverride(DistGit):
         self.chroots = chroots
         self.build_id = None
         self.srpm = None
+        self.done = None
+        self.build_proxy = None
 
     def __repr__(self):  # pragma: no cover
         return "<DistGitOverride {!r} for {!r}>".format(self.src, self.chroots)

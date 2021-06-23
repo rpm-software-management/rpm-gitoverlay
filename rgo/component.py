@@ -59,10 +59,9 @@ class Component(object):
         self.distgit_overrides = set(distgit_overrides)
 
         self.build_id = None
+        self.build_proxy = None
         self.done = None
         self.srpm = None
-        self.state = None
-        self.success = None
 
     def __repr__(self): # pragma: no cover
         return "<Component {0.name!r}: git({0.git!r}) distgit({0.distgit})>".format(self)
