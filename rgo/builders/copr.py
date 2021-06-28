@@ -83,7 +83,8 @@ class CoprBuilder(object):
                 self.chroots,
                 enable_net=self.enable_net,
                 delete_after_days=delete_after_days,
-                additional_repos=additional_repos
+                additional_repos=additional_repos,
+                unlisted_on_hp=True
             )
             LOGGER.info("Created COPR project: %s/%s", self.project.ownername, self.project.name)
 
