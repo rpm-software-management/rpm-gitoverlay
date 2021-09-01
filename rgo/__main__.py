@@ -94,7 +94,7 @@ def add_build_actions(parser):
     )
     copr.add_argument(
         "--no-wait",
-        help="Don't wait for the builds to finish (doesn't output built RPMs",
+        help="Don't wait for the builds to finish (doesn't output built RPMs)",
         action="store_true"
     )
 
