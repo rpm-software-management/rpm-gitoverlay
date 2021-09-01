@@ -244,20 +244,24 @@ class CoprBuilder(object):
                     if component.build_id:
                         if not component.done:
                             component.build_proxy = self.client.build_proxy.get(component.build_id)
-                            component.done, failed = CoprBuilder._report_build_proxy_and_get_status(
+                            component.done, build_failed = CoprBuilder._report_build_proxy_and_get_status(
                                 component.build_proxy,
                                 component.name)
                             if not component.done:
                                 done = False
+                            if build_failed:
+                                failed = True
                     for override in component.distgit_overrides:
                         if override.build_id:
                             if not override.done:
                                 override.build_proxy = self.client.build_proxy.get(override.build_id)
-                                override.done, failed = CoprBuilder._report_build_proxy_and_get_status(
+                                override.done, build_failed = CoprBuilder._report_build_proxy_and_get_status(
                                         override.build_proxy,
                                         ", ".join(override.chroots) + " distgit-override " + component.name)
                                 if not override.done:
                                     done = False
+                                if build_failed:
+                                    failed = True
                 if done:
                     break
 
