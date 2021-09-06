@@ -169,15 +169,14 @@ def main():
     for component in ovl.components:
         # Build SRPMs
         component.make_srpms(tmpdir)
-        utils.try_prep(component.srpm)
-        for override in component.distgit_overrides:
-            utils.try_prep(override.srpm)
 
     out = []
     if args.build_action == "srpm":
         for component in ovl.components:
+            utils.try_prep(component.srpm)
             out.append(component.srpm)
             for override in component.distgit_overrides:
+                utils.try_prep(override.srpm)
                 out.append("  " + override.srpm)
     elif args.build_action == "rpm":
         # Build RPMs
