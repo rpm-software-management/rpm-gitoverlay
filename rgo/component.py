@@ -115,11 +115,7 @@ class Component(object):
             version, release = self.git.describe(self.name, spec_version=spec_version, version_from=self.version_from)
 
             # Prepare nvr
-            if release == "1":
-                # tagged version, no need to add useless numbers
-                nvr = "{!s}-{!s}".format(self.name, version)
-            else:
-                nvr = "{!s}-{!s}-{!s}".format(self.name, version, release)
+            nvr = "{!s}-{!s}-{!s}".format(self.name, version, release)
 
             # Prepare archive from git (compressed tarball)
             archive = os.path.join(workdir, "{!s}.tar.xz".format(nvr))

@@ -216,19 +216,6 @@ class Git(object):
             version = "0"
             release = "0.{!s}.{!s}.g{!s}".format(date, commits, hash)
 
-        elif commits == 0:
-            # release
-
-            # we'll set version to git_version
-            # it's a release, we'll set release to 1
-
-            # Example:
-            #    spec:   doesn't matter
-            #    git:    version=1.9; there are no commits after the tag
-            #    result: version=0, release=0.YYYYMMDDhhmmss.3.gcafecafe
-            version = git_version
-            release = "1"
-
         else:
             # release + patches
 
