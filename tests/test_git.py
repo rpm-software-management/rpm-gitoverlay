@@ -76,7 +76,7 @@ class TestGit(unittest.TestCase):
         self.tag("1.9")
         ver, rel = repo.describe()
         self.assertEqual(ver, "1.9")
-        self.assertEqual(rel, "1")
+        self.assertRegex(rel, R"[0-9]{{14}}\.0\.g{!s}".format(sha))
 
         # commits after tag
         self.commit("test")
@@ -109,10 +109,21 @@ class TestGit(unittest.TestCase):
         # prefixes
         self.commit("v-prefix")
         self.tag("v0.2")
-        self.assertEqual(repo.describe(), ("0.2", "1"))
+        sha = repo.rev_parse("HEAD", short=True)
+        ver, rel = repo.describe()
+        self.assertEqual(ver, "0.2")
+        self.assertRegex(rel, R"[0-9]{{14}}\.0\.g{!s}".format(sha))
+
         self.commit("GNOME-style (upper)")
         self.tag("GNOME_BUILDER_3_21_1")
-        self.assertEqual(repo.describe("gnome-builder"), ("3.21.1", "1"))
+        sha = repo.rev_parse("HEAD", short=True)
+        ver, rel = repo.describe("gnome-builder")
+        self.assertEqual(ver, "3.21.1")
+        self.assertRegex(rel, R"[0-9]{{14}}\.0\.g{!s}".format(sha))
+
         self.commit("GNOME-style (lower)")
         self.tag("libhif_0_7_0")
-        self.assertEqual(repo.describe("libhif"), ("0.7.0", "1"))
+        sha = repo.rev_parse("HEAD", short=True)
+        ver, rel = repo.describe("libhif")
+        self.assertEqual(ver, "0.7.0")
+        self.assertRegex(rel, R"[0-9]{{14}}\.0\.g{!s}".format(sha))
