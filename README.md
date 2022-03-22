@@ -4,11 +4,7 @@ Manage an overlay repository of RPMs from upstream git.
 
 ## Running unit tests
 
-Without coverage:
-`$ python3 setup.py test`
-
-With coverage:
-`$ python3 setup.py nosetests`
+`$ python3 -m unittest discover tests/`
 
 ## Installation
 

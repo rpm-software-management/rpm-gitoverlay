@@ -16,12 +16,13 @@
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
 
 import io
-from nose import tools
+import unittest
 import marshmallow
 from rgo.alias import Alias, Aliases
 from rgo.schema import AliasSchema
 
-class TestAlias(object):
+
+class TestAlias(unittest.TestCase):
     def test_gitconfig(self):
         data = [{"name": "github", "url": "git@github.com:"}]
         gitconfig = '[url "git@github.com:"]\ninsteadOf = "github:"'
@@ -29,27 +30,27 @@ class TestAlias(object):
         with io.StringIO() as fd:
             result.gitconfig.write(fd)
             fd.seek(0)
-            tools.eq_(fd.read().rstrip(), gitconfig)
+            self.assertEqual(fd.read().rstrip(), gitconfig)
 
     def test_duplicate(self):
         data = [{"name": "foo", "url": "bar"},
                 {"name": "foo", "url": "baz"}]
-        with tools.assert_raises(marshmallow.ValidationError) as ve:
+        with self.assertRaises(marshmallow.ValidationError) as ve:
             AliasSchema(many=True).load(data)
-        tools.eq_(ve.exception.messages, {"name": ["Duplicates found"]})
+        self.assertEqual(ve.exception.messages, {"name": ["Duplicates found"]})
 
     def test_many(self):
         alias = {"name": "foo", "url": "bar"}
-        tools.ok_(isinstance(AliasSchema().load(alias), Alias))
-        tools.ok_(isinstance(AliasSchema(many=True).load([alias]), Aliases))
+        self.assertTrue(isinstance(AliasSchema().load(alias), Alias))
+        self.assertTrue(isinstance(AliasSchema(many=True).load([alias]), Aliases))
 
     def test_builtins(self):
         data = [{"name": "foo", "url": "u1"},
                 {"name": "bar", "url": "u2"}]
         results = AliasSchema(many=True).load(data)
-        tools.eq_(len(results), 2)
-        tools.ok_("foo" in results)
-        tools.ok_("baz" not in results)
-        tools.ok_(results[0] in results)
-        tools.eq_(AliasSchema().dump(results["foo"]), data[0])
-        tools.eq_(AliasSchema().dump(results[1]), data[1])
+        self.assertEqual(len(results), 2)
+        self.assertTrue("foo" in results)
+        self.assertTrue("baz" not in results)
+        self.assertTrue(results[0] in results)
+        self.assertEqual(AliasSchema().dump(results["foo"]), data[0])
+        self.assertEqual(AliasSchema().dump(results[1]), data[1])

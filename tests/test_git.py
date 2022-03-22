@@ -20,10 +20,11 @@ import os
 import shutil
 import subprocess
 import tempfile
-from nose import tools
+import unittest
 from rgo.schema import GitSchema, DistGitSchema
 
-class TestGit(object):
+
+class TestGit(unittest.TestCase):
     def setUp(self):
         self._bare = tempfile.mkdtemp(suffix=".git")
         subprocess.run(["git", "init", "--bare", self._bare], check=True)
@@ -53,11 +54,11 @@ class TestGit(object):
         results = GitSchema().load({"src": self._bare, "latest-tag": True})
         results.clone(self._cwd)
         self.commit("test")
-        tools.eq_(results.ref, None)
+        self.assertEqual(results.ref, None)
         self.tag("0.1")
-        tools.eq_(results.ref, "0.1")
+        self.assertEqual(results.ref, "0.1")
         self.commit("test")
-        tools.eq_(results.ref, "0.1")
+        self.assertEqual(results.ref, "0.1")
 
     def test_describe(self):
         results = GitSchema().load({"src": self._bare})
@@ -68,14 +69,14 @@ class TestGit(object):
         self.commit("no tags")
         sha = repo.rev_parse("HEAD", short=True)
         ver, rel = repo.describe()
-        tools.eq_(ver, "0")
-        tools.assert_regexp_matches(rel, R"0\.[0-9]{{14}}\.1\.g{!s}".format(sha))
+        self.assertEqual(ver, "0")
+        self.assertRegex(rel, R"0\.[0-9]{{14}}\.1\.g{!s}".format(sha))
 
         # tag
         self.tag("1.9")
         ver, rel = repo.describe()
-        tools.eq_(ver, "1.9")
-        tools.eq_(rel, "1")
+        self.assertEqual(ver, "1.9")
+        self.assertEqual(rel, "1")
 
         # commits after tag
         self.commit("test")
@@ -83,36 +84,35 @@ class TestGit(object):
         self.commit("test")
         sha = repo.rev_parse("HEAD", short=True)
         ver, rel = repo.describe()
-        tools.eq_(ver, "1.9")
-        tools.assert_regexp_matches(rel, R"[0-9]{{14}}\.3\.g{!s}".format(sha))
+        self.assertEqual(ver, "1.9")
+        self.assertRegex(rel, R"[0-9]{{14}}\.3\.g{!s}".format(sha))
 
         # commits after tag, spec has a higher version, version_from="git"
         ver, rel = repo.describe(spec_version="2.0", version_from="git")
-        tools.eq_(ver, "1.9")
-        tools.assert_regexp_matches(rel, R"[0-9]{{14}}\.3\.g{!s}".format(sha))
+        self.assertEqual(ver, "1.9")
+        self.assertRegex(rel, R"[0-9]{{14}}\.3\.g{!s}".format(sha))
 
         # commits after tag, spec has a higher version, version_from="spec"
         ver, rel = repo.describe(spec_version="2.0", version_from="spec")
-        tools.eq_(ver, "2.0")
-        tools.assert_regexp_matches(rel, R"0\.[0-9]{{14}}\.1\.9\+3\.g{!s}".format(sha))
+        self.assertEqual(ver, "2.0")
+        self.assertRegex(rel, R"0\.[0-9]{{14}}\.1\.9\+3\.g{!s}".format(sha))
 
         # commits after tag, spec has a lower version, version_from="git"
         ver, rel = repo.describe(spec_version="1.0", version_from="git")
-        tools.eq_(ver, "1.9")
-        tools.assert_regexp_matches(rel, R"[0-9]{{14}}\.3\.g{!s}".format(sha))
+        self.assertEqual(ver, "1.9")
+        self.assertRegex(rel, R"[0-9]{{14}}\.3\.g{!s}".format(sha))
 
         # commits after tag, spec has a lower version, version_from="spec"
         ver, rel = repo.describe(spec_version="1.0", version_from="spec")
-        tools.eq_(ver, "1.0")
-        tools.assert_regexp_matches(rel, R"[0-9]{{14}}\.1\.9\+3\.g{!s}".format(sha))
+        self.assertEqual(ver, "1.0")
 
         # prefixes
         self.commit("v-prefix")
         self.tag("v0.2")
-        tools.eq_(repo.describe(), ("0.2", "1"))
+        self.assertEqual(repo.describe(), ("0.2", "1"))
         self.commit("GNOME-style (upper)")
         self.tag("GNOME_BUILDER_3_21_1")
-        tools.eq_(repo.describe("gnome-builder"), ("3.21.1", "1"))
+        self.assertEqual(repo.describe("gnome-builder"), ("3.21.1", "1"))
         self.commit("GNOME-style (lower)")
         self.tag("libhif_0_7_0")
-        tools.eq_(repo.describe("libhif"), ("0.7.0", "1"))
+        self.assertEqual(repo.describe("libhif"), ("0.7.0", "1"))

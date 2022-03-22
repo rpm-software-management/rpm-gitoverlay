@@ -9,7 +9,6 @@ Source0:        %{url}/archive/%{version}/%{name}-%{version}.tar.gz
 
 BuildRequires:  python3-devel
 BuildRequires:  python3-setuptools
-BuildRequires:  python3-nose
 BuildRequires:  python3-marshmallow >= 3
 BuildRequires:  python3-marshmallow-enum
 BuildRequires:  rpm-python3
@@ -45,7 +44,7 @@ BuildArch:      noarch
 %py3_install
 
 %check
-%{__python3} setup.py test
+%{__python3} -m unittest discover tests/
 
 %files
 %license COPYING

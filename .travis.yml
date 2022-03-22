@@ -9,4 +9,4 @@ before_install:
   # `sudo apt-get -y python3-rpm` is not sufficient because we're working in virtualenv
   - pip install rpm-py-installer
 install: pip install .
-script: python setup.py test
+script: python -m unittest discover tests/
