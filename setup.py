@@ -38,8 +38,6 @@ args = dict(
     extras_require={
         "copr": ["beautifulsoup4", "copr", "requests"]
     },
-    tests_require=["nose"] + REQUIRES,
-    test_suite="nose.collector",
     classifiers=[
         "Development Status :: 2 - Pre-Alpha",
         "Intended Audience :: Developers",
