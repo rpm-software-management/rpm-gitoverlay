@@ -1,10 +1,10 @@
 Name:           rpm-gitoverlay
-Version:        0
+Version:        0.1
 Release:        1%{?dist}
 Summary:        Manage an overlay repository of RPMs from upstream git
 
 License:        GPLv3+
-URL:            https://github.com/ignatenkobrain/%{name}
+URL:            https://github.com/rpm-software-management/%{name}
 Source0:        %{url}/archive/%{version}/%{name}-%{version}.tar.gz
 
 BuildRequires:  python3-devel
@@ -54,5 +54,8 @@ BuildArch:      noarch
 %{python3_sitelib}/rgo/
 
 %changelog
+* Tue Mar 29 2022 Ales Matej <amatej@redhat.com> - 0.1-1
+- Release first 0.1 version
+
 * Sun Jul 10 2016 Igor Gnatenko <ignatenko@redhat.com> - 0-1
 - Initial package
