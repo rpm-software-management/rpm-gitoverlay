@@ -10,7 +10,7 @@ Manage an overlay repository of RPMs from upstream git.
 
 #### Fedora
 ```
-$ sudo dnf copr enable ignatenkobrain/rpm-gitoverlay
+$ sudo dnf copr enable rpmsoftwaremanagement/rpm-gitoverlay
 $ sudo dnf install rpm-gitoverlay
 ```
 
