@@ -174,6 +174,13 @@ class Git(object):
         date = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
 
         if version_from == "spec" and spec_version != git_version:
+            assert(spec_version, "We are taking version from spec, the spec_version is mandatory")
+
+            # Pre-release from spec, git version cannot be detected (no git tag), set it to "0"
+            if not git_version:
+                # Set it to "0" because rpm.labelCompare() expects: EVR string or (E,V,R) tuple
+                git_version = "0"
+
             if rpm.labelCompare(spec_version, git_version) == 1:
                 # pre-release, spec_version > git_version
 
