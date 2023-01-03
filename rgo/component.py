@@ -160,7 +160,8 @@ class Component(object):
         try:
             result = subprocess.run(["rpmbuild", "-bs", final_spec_path, "--nodeps",
                                      "--define", "_topdir {!s}".format(workdir),
-                                     "--define", "_sourcedir {!s}".format(workdir)],
+                                     "--define", "_sourcedir {!s}".format(workdir),
+                                     "--define", "_srcrpmdir %{_topdir}/SRPMS"],
                                     check=True, universal_newlines=True,
                                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
         except subprocess.CalledProcessError as err:
