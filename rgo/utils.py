@@ -83,11 +83,16 @@ def prepare_spec(spec, version, release, prefix, patches):
     if len([x for _, _, x in rpmspec.sources if x == rpm.RPMBUILD_ISSOURCE]) > 1:
         raise NotImplementedError
 
+    patches_to_drop = []
+    if patches == PatchesAction.drop:
+        for source in rpmspec.sources:
+            if source[2] == rpm.RPMBUILD_ISPATCH:
+                patches_to_drop.append(source[0])
+
     with open(spec, "r") as specfile:
         _spec = specfile.readlines()
 
     out = []
-    patch_tag_re = re.compile(r"^Patch\d+:")
     source_tag_re = re.compile(r"^Source(\d*):")
     patch_apply_re = re.compile(r"^%patch\d+")
     for line in _spec:
@@ -96,10 +101,6 @@ def prepare_spec(spec, version, release, prefix, patches):
             line = "Version: {!s}".format(version)
         elif line.startswith("Release:"):
             line = "Release: {!s}%{{?dist}}".format(release)
-        elif line.startswith("Patch"):
-            match = patch_tag_re.match(line)
-            if match and patches == PatchesAction.drop:
-                continue
         elif line.startswith("Source"):
             match = source_tag_re.match(line)
             if match:
@@ -110,17 +111,26 @@ def prepare_spec(spec, version, release, prefix, patches):
                     line = "Source{:d}: {!s}".format(int(match.group(1)), archive)
         elif line.startswith(("%setup", "%autosetup")):
             line = "{!s} -n {!s}".format(line, prefix)
+        elif line.startswith("%autopatch") or line.startswith("%patchlist"):
+            if patches == PatchesAction.drop:
+                continue
         elif line.startswith("%patch"):
             match = patch_apply_re.match(line)
             if match and patches == PatchesAction.drop:
                 continue
-        elif line.startswith("%autopatch"):
-            if patches == PatchesAction.drop:
-                continue
         elif line == "%changelog":
             # Wipe out changelog
             break
+        # drop unwanted patch tags
+        drop_line = False
+        for p in patches_to_drop:
+            if p in line:
+                drop_line = True
+                break
+        if drop_line:
+            break
         out.append(line)
+
 
     return "\n".join(out)
 
