@@ -21,7 +21,7 @@ REQUIRES = ["marshmallow", "marshmallow-enum"]
 
 args = dict(
     name="rpm-gitoverlay",
-    version="0",
+    version="0.3",
     author="Igor Gnatenko",
     author_email="ignatenko@redhat.com",
     url="https://github.com/ignatenkobrain/rpm-gitoverlay",
