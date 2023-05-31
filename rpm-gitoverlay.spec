@@ -1,5 +1,5 @@
 Name:           rpm-gitoverlay
-Version:        0.3
+Version:        0.4
 Release:        1%{?dist}
 Summary:        Manage an overlay repository of RPMs from upstream git
 
@@ -54,6 +54,9 @@ BuildArch:      noarch
 %{python3_sitelib}/rgo/
 
 %changelog
+* Wed May 31 2023 Ales Matej <amatej@redhat.com> - 0.4-1
+- Bugfix: we don't want to skip rest of the specifle just one line
+
 * Wed May 31 2023 Ales Matej <amatej@redhat.com> - 0.3-1
 - Make patch dropping more robust (it now accepts %patchlist)
 - Explicitly define %_srcrpmdir
