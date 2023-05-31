@@ -128,7 +128,7 @@ def prepare_spec(spec, version, release, prefix, patches):
                 drop_line = True
                 break
         if drop_line:
-            break
+            continue
         out.append(line)
 
 
