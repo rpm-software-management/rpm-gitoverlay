@@ -63,7 +63,11 @@ class Git(object):
             self.use_current_head = True
             LOGGER.info("Using existing git repository: %r HEAD: %r", dest, self.ref_info())
         else:
-            subprocess.run(["git", "clone", self.src, dest], check=True)
+            clone_command = ["git", "clone", self.src, dest]
+            if self.branch:
+                clone_command = clone_command + ["--branch", self.branch]
+
+            subprocess.run(clone_command, check=True)
 
     def _latest_tag(self, ref):
         assert self.cwd
